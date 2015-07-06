@@ -1,6 +1,6 @@
 CXX=g++-5
 CXXFLAGS=-g -c -std=c++14
-LDFLAGS=-lopencv_core -lopencv_highgui
+LDFLAGS=-lopencv_core -lopencv_highgui -lopencv_imgproc
 OBJECTS=main.o
 EXECUTABLE=contrast
 

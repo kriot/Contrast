@@ -7,6 +7,7 @@
 
 const int distance = 6;
 const double diff_factor = 0.01;
+const int neighborhood_size = 3; //for masks
 
 std::vector<long long> calcHist(const cv::Mat& img, int ch)
 {
@@ -19,7 +20,69 @@ std::vector<long long> calcHist(const cv::Mat& img, int ch)
 	return res;
 }
 
+std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::Mat& mask) //mid, min, max
+{
+	cv::Vec3b max(0,0,0);
+	cv::Vec3b min(255,255,255);
+	long long count = 0;
+	std::vector<long long> mid{0, 0, 0};
+	for(int i = 0; i < img.rows - 1; ++i) //Awful thing
+		for(int j = 0; j < img.cols; ++j)
+			if(mask.at<cv::Vec3b>(i, j)[0] > 0)
+			{
+				auto p = img.at<cv::Vec3b>(i, j);
+				
+				mid[0] += p[0];
+				mid[1] += p[1];
+				mid[2] += p[2];
+				count++;
 
+				for(int i = 0; i < 3; ++i)
+				{
+					if(p[i] > max[i]) 
+						max[i] = p[i];
+					if(p[i] < min[i])
+						min[i] = p[i];
+				}
+			}
+
+	return std::make_tuple(cv::Vec3b(mid[0]/count, mid[1]/count, mid[2]/count), min, max);
+}
+
+void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv::Vec3b max, cv::Vec3b min)
+{
+	//Function constructoring
+	int max_cord = std::max({max[0], max[1], max[2]});
+	int min_cord = std::min({min[0], min[1], min[2]});
+	std::vector<double> x{min_cord, max_cord, mid[0], mid[1], mid[2]};
+	std::vector<double> y{       0,      255,   c[0],   c[1],   c[2]};
+	double sumx = 0,
+		   sumy = 0,
+		   sumxp = 0,
+		   sumxy = 0;
+	for(int i = 0; i < x.size(); ++i)
+	{
+		sumx  += x[i];
+		sumy  += y[i];
+		sumxp += x[i]*x[i];
+		sumxy += x[i]*y[i];
+	}
+	double a = (sumx*sumy - x.size()*sumxy) / (sumx*sumx - x.size()*sumxp);
+	double b = (sumx*sumxy - sumxp*sumy)    / (sumx*sumx - x.size()*sumxp);
+	auto f = [=](int x) { return a*x + b; };
+	//Applying
+	for(int i = 0; i < img.rows - 1; ++i) //Awful thing
+		for(int j = 0; j < img.cols; ++j)
+			for(int ch = 0; ch < 3; ++ch)
+			{
+				int v = img.at<cv::Vec3b>(i, j)[ch];
+				double k = mask.at<cv::Vec3b>(i, j)[0] / 255.;
+				img.at<cv::Vec3b>(i, j)[ch] = std::max(std::min(
+							f(v) * k + v * (1 - k)
+							, 255.), 0.); 
+			}
+	
+}
 
 int main(int argc, char** argv)
 {
@@ -90,7 +153,7 @@ int main(int argc, char** argv)
 
 	std::vector<cv::Mat> masks(9);
 	for(auto& mask: masks)
-		mask = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(70,70,70));
+		mask = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
 	for(int i = 0; i < image.rows - 1; ++i) //Awful thing
 		for(int j = 0; j < image.cols; ++j)
 		{	
@@ -114,13 +177,41 @@ int main(int argc, char** argv)
 					color = i;
 			}
 //			std::cout << "\n";
-			masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(std::get<0>(defColors[color]), std::get<1>(defColors[color]), std::get<2>(defColors[color]));
+
+			//colorful
+			//masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(std::get<0>(defColors[color]), std::get<1>(defColors[color]), std::get<2>(defColors[color]));
+			//for work
+			masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(255, 255, 255);
 		}
+
+	//Inflating masks and blur
+	std::vector<cv::Mat> nmasks(masks.size());
+	
+	for(int i = 0; i < masks.size(); ++i)
+	{
+		auto mask = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
+		nmasks[i] = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
+		//Inflating
+		auto paint = [&] (int i0, int j0) {
+			for(int k = -neighborhood_size; k <= neighborhood_size; ++k)
+				for(int l = -neighborhood_size; l <= neighborhood_size; ++l)
+					if(i0+k >= 0 && i0+k < image.rows && j0+l >=0 && j0+l < image.cols)
+						mask.at<cv::Vec3b>(i0+k, j0+l) = cv::Vec3b(255,255,255);
+		};
+
+		for(int k = 0; k < image.rows - 1; ++k) //Awful thing
+			for(int l = 0; l < image.cols; ++l)
+				if(masks[i].at<cv::Vec3b>(k, l)[0] != 0)
+					paint(k, l);
+		//Blur
+//		mask.copyTo(nmasks[i]);
+		cv::GaussianBlur(mask, nmasks[i], cv::Size(neighborhood_size*2+1, neighborhood_size*2+1), 0);
+	}
 
 	for(int i = 0; i < 9; ++i)
 	{	
 		cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
-		cv::imshow( "Display window", masks[i] );                   // Show our image inside it.
+		cv::imshow( "Display window", nmasks[i] );                   // Show our image inside it.
 		cv::waitKey(0); 
 	}
 }
