@@ -1,5 +1,5 @@
 CXX=g++-5
-CXXFLAGS=-c -std=c++14
+CXXFLAGS=-g -c -std=c++14
 LDFLAGS=-lopencv_core -lopencv_highgui
 OBJECTS=main.o
 EXECUTABLE=contrast

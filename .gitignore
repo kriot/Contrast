@@ -1,2 +1,5 @@
 *.o
+*.tiff
+*.tif
+*.jpg
 contrast
