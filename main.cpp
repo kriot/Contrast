@@ -8,7 +8,17 @@
 const int distance = 6;
 const double diff_factor = 0.01;
 const int neighborhood_size = 3; //for masks
-
+std::vector<cv::Vec3b> color{
+	{0, 0, 0}, 
+	{0, 0, 255},
+	{0, 255, 0},
+	{0, 255, 255},
+	{255, 0, 0},
+	{255, 0, 255},
+	{255, 255, 0},
+	{255, 255, 255},
+	
+};
 std::vector<long long> calcHist(const cv::Mat& img, int ch)
 {
 	std::vector<long long> res(256, 0);
@@ -46,7 +56,7 @@ std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::M
 				}
 			}
 
-	return std::make_tuple(cv::Vec3b(mid[0]/count, mid[1]/count, mid[2]/count), min, max);
+	return std::make_tuple(cv::Vec3b(mid[0]/(count+1), mid[1]/(count+1), mid[2]/(count+1)), min, max);
 }
 
 void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv::Vec3b max, cv::Vec3b min)
@@ -54,8 +64,9 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 	//Function constructoring
 	int max_cord = std::max({max[0], max[1], max[2]});
 	int min_cord = std::min({min[0], min[1], min[2]});
-	std::vector<double> x{min_cord, max_cord, mid[0], mid[1], mid[2]};
-	std::vector<double> y{       0,      255,   c[0],   c[1],   c[2]};
+	std::vector<double> x{min_cord, max_cord, /*mid[0], mid[1], mid[2]*/};
+	std::cout << "Min: " << min_cord << ", max: " << max_cord << "\n";
+	std::vector<double> y{       0,      255, /*  c[0],   c[1],   c[2]*/};
 	double sumx = 0,
 		   sumy = 0,
 		   sumxp = 0,
@@ -69,6 +80,7 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 	}
 	double a = (sumx*sumy - x.size()*sumxy) / (sumx*sumx - x.size()*sumxp);
 	double b = (sumx*sumxy - sumxp*sumy)    / (sumx*sumx - x.size()*sumxp);
+	std::cout << "A: " << a << ", b: " << b <<"\n";
 	auto f = [=](int x) { return a*x + b; };
 	//Applying
 	for(int i = 0; i < img.rows - 1; ++i) //Awful thing
@@ -132,6 +144,7 @@ int main(int argc, char** argv)
 		std::cout << "\n";
 	}
 	//Making masks
+	std::cout << "Making masks\n";
 	double b = 0;
 	for(auto _b: peaks[0])
 	{
@@ -158,25 +171,19 @@ int main(int argc, char** argv)
 		for(int j = 0; j < image.cols; ++j)
 		{	
 			auto p = image.at<cv::Vec3b>(i, j);
-			/*
-			auto isThere = [&](int v, int c) { return peaks[c].find(v) != peaks[c].end(); };
-			int color = isThere(p[0], 0) << 0 | isThere(p[1], 1) << 1 | isThere(p[2], 2) << 2;
-			masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(isThere(p[0],0)*255, isThere(p[1],1)*255, isThere(p[2],2)*255);
-			*/
+//			auto isThere = [&](int v, int c) { return peaks[c].find(v) != peaks[c].end(); };
+//			int color = isThere(p[0], 0) << 0 | isThere(p[1], 1) << 1 | isThere(p[2], 2) << 2;
+//			masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(isThere(p[0],0)*255, isThere(p[1],1)*255, isThere(p[2],2)*255);
 			//another way
-			std::vector<std::tuple<int, int, int>> defColors({/*std::make_tuple(0,0,0),*/ std::make_tuple(0, 0, r), std::make_tuple(0, g, 0), /*std::make_tuple(0, g, r),*/ std::make_tuple(b, 0, 0), /*std::make_tuple(b, 0, r),*/ /*std::make_tuple(b, g, 0), std::make_tuple(b, g, r)*/});
+			
+			std::vector<std::tuple<int, int, int>> defColors({std::make_tuple(0,0,-1000), std::make_tuple(0, 0, r), std::make_tuple(0, g, 0), std::make_tuple(0, g, r), std::make_tuple(b, 0, 0), std::make_tuple(100*b, 0, r), std::make_tuple(100*b, g, 0), std::make_tuple(100*b, g, r)});
 			std::vector<int> dist;
 			for(auto c: defColors)
 				dist.push_back((std::get<0>(c)-p[0])*(std::get<0>(c)-p[0])+(std::get<1>(c)-p[1])*(std::get<1>(c)-p[1])+(std::get<2>(c)-p[2])*(std::get<2>(c)-p[2]));
 			int color = 0;
-//			std::cout << "Dists:\n";
 			for(int i = 0; i < defColors.size(); ++i)
-			{
-//				std::cout << dist[i] << " ";
 				if(dist[color] > dist[i])
 					color = i;
-			}
-//			std::cout << "\n";
 
 			//colorful
 			//masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(std::get<0>(defColors[color]), std::get<1>(defColors[color]), std::get<2>(defColors[color]));
@@ -185,6 +192,7 @@ int main(int argc, char** argv)
 		}
 
 	//Inflating masks and blur
+	std::cout << "Improving masks\n";
 	std::vector<cv::Mat> nmasks(masks.size());
 	
 	for(int i = 0; i < masks.size(); ++i)
@@ -207,11 +215,28 @@ int main(int argc, char** argv)
 //		mask.copyTo(nmasks[i]);
 		cv::GaussianBlur(mask, nmasks[i], cv::Size(neighborhood_size*2+1, neighborhood_size*2+1), 0);
 	}
-
+/*
 	for(int i = 0; i < 9; ++i)
 	{	
 		cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
 		cv::imshow( "Display window", nmasks[i] );                   // Show our image inside it.
 		cv::waitKey(0); 
 	}
+*/
+	//Contrast
+	std::cout << "Contrast processing\n";
+	for(int i = 0; i < nmasks.size(); ++i)
+	{
+		auto t = getForMask(image, nmasks[i]);
+		auto mid = std::get<0>(t);
+		auto min = std::get<1>(t);
+		auto max = std::get<2>(t);
+		auto middle = [&] (cv::Vec3b m) {return cv::Vec3b((m[0] + b)/2, (m[1] + g)/2, (m[2] + r)/2);};
+		contrast(image, nmasks[i], mid, color[i], middle(max), middle(min));		
+	}
+	cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
+	cv::imshow( "Display window", image );                   // Show our image inside it.
+	cv::waitKey(0); 
+	
+	cv::imwrite( "output.tif", image);
 }
