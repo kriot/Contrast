@@ -1,7 +1,9 @@
 #include <iostream>
 #include <vector>
+#include <map>
 #include <opencv2/opencv.hpp>
 
+const int COUNT_OF_THE_BIGGEST = 5;
 
 std::vector<long long> calcHist(const cv::Mat& img, int ch)
 {
@@ -14,6 +16,8 @@ std::vector<long long> calcHist(const cv::Mat& img, int ch)
 		}
 	return res;
 }
+
+
 
 int main(int argc, char** argv)
 {
@@ -29,7 +33,15 @@ int main(int argc, char** argv)
 		return -1;
 	}
 	std::cout << "Image is read\n";
+	//Calculatioing histograms
 	std::vector<std::vector<long long>> hist = {calcHist(image, 1), calcHist(image, 2), calcHist(image, 3)};
-	for(auto h: hist[0])
-		std::cout << h << " ";
+	//Sorting histograms
+	std::vector<std::multimap<long long, int>> shist; //count - color
+	for(auto h: hist)
+	{
+		shist.push_back(std::multimap<long long, int>());
+		for(int i = 0; i < h.size(); ++i)
+			shist.back().insert(std::make_pair(h[i], i));
+	}
+	//Choosing the biggest
 }
