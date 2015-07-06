@@ -1,9 +1,10 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <set>
 #include <opencv2/opencv.hpp>
 
-const int COUNT_OF_THE_BIGGEST = 5;
+const int COUNT_OF_THE_BIGGEST = 50;
 
 std::vector<long long> calcHist(const cv::Mat& img, int ch)
 {
@@ -36,12 +37,28 @@ int main(int argc, char** argv)
 	//Calculatioing histograms
 	std::vector<std::vector<long long>> hist = {calcHist(image, 1), calcHist(image, 2), calcHist(image, 3)};
 	//Sorting histograms
-	std::vector<std::multimap<long long, int>> shist; //count - color
+	std::vector<std::multimap<long long, int, std::greater<long long>>> shist; //count - color
 	for(auto h: hist)
 	{
-		shist.push_back(std::multimap<long long, int>());
+		shist.push_back(std::multimap<long long, int, std::greater<long long>>());
 		for(int i = 0; i < h.size(); ++i)
 			shist.back().insert(std::make_pair(h[i], i));
 	}
 	//Choosing the biggest
+	std::vector<std::set<int>> biggest;
+	for(auto h: shist)
+	{
+		biggest.push_back(std::set<int>());
+		int count = 0;
+		for(auto i = h.begin(); i != h.end() && count < COUNT_OF_THE_BIGGEST; ++i, ++count)
+		{
+			biggest.back().insert(i->second);
+		}	
+	}
+	for(auto b: biggest)
+	{
+		for(auto color_ch: b)
+			std::cout << color_ch << " ";
+		std::cout << "\n";
+	}
 }
