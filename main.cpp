@@ -7,8 +7,8 @@
 
 const int distance = 6;
 const double diff_factor = 0.01;
-const int neighborhood_size = 10; //for masks
-const double gauss_factor = 2;
+const int neighborhood_size = 3; //for masks
+const double gauss_factor = 6;
 const int hist_scale = 1;
 
 
@@ -124,6 +124,7 @@ void autoContrast(cv::Mat& image)
 	//Base colors
 	{
 		//Calculatioing histogram (3D)
+		std::cout << "Calculating histogram\n";
 		std::vector<std::vector<std::vector<int>>> hist(256/hist_scale, 
 				std::vector<std::vector<int>>(256/hist_scale, 
 					std::vector<int>(256/hist_scale, 
@@ -136,6 +137,7 @@ void autoContrast(cv::Mat& image)
 			}
 
 		//Choosing the peaks
+		std::cout << "Peaks\n";
 		long long s = image.rows * image.cols/pow(hist.size(), 3); //image area
 		std::vector<cv::Vec3b> peaks;
 		for(int i = 0; i < hist.size(); ++i)
@@ -177,65 +179,62 @@ void autoContrast(cv::Mat& image)
 			}
 			freqColor[closer].insert(p);
 		}
-		for(int i = 0; i < freqColor.size(); ++i)
+/*		for(int i = 0; i < freqColor.size(); ++i)
 		{
 			std::cout << "Color " << i << ":\n";
 			for(auto p: freqColor[i])
 				std::cout << "Peak: " << (int)p[0] << ", " << (int)p[1] << ", " << (int)p[2] <<"\n";
-		}
+		}*/
 	}
 	//Making masks
 	std::cout << "Making masks\n";
 	std::vector<cv::Mat> masks(freqColor.size());
 	for(auto& mask: masks)
 		mask = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
+	{
+		for(int i = 0; i < image.rows - 1; ++i) //Awful thing
+			for(int j = 0; j < image.cols; ++j)
+			{	
+				auto p = image.at<cv::Vec3b>(i, j);
+				int color = -1;
+				for(int i = 0; i < freqColor.size() && color == -1; ++i)
+					if(freqColor[i].find(p) != freqColor[i].end())
+						color = i;
+				if(color != -1)
+					masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(255, 255, 255);
+			}
 
-	for(int i = 0; i < image.rows - 1; ++i) //Awful thing
-		for(int j = 0; j < image.cols; ++j)
-		{	
-			auto p = image.at<cv::Vec3b>(i, j);
-			int color = -1;
-			for(int i = 0; i < freqColor.size() && color == -1; ++i)
-				if(freqColor[i].find(p) != freqColor[i].end())
-					color = i;
-			if(color != -1)
-				masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(255, 255, 255);
+		//Inflating masks and blur
+		std::cout << "Improving masks\n";
+
+		for(int i = 0; i < masks.size(); ++i)
+		{
+			auto mask = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
+			//Inflating
+			auto paint = [&] (int i0, int j0) {
+				for(int k = -neighborhood_size; k <= neighborhood_size; ++k)
+					for(int l = -neighborhood_size; l <= neighborhood_size; ++l)
+						if(i0+k >= 0 && i0+k < image.rows && j0+l >=0 && j0+l < image.cols)
+							mask.at<cv::Vec3b>(i0+k, j0+l) = cv::Vec3b(255,255,255);
+			};
+
+			for(int k = 0; k < image.rows - 1; ++k) //Awful thing
+				for(int l = 0; l < image.cols; ++l)
+					if(masks[i].at<cv::Vec3b>(k, l)[0] != 0)
+						paint(k, l);
+			//Blur
+			cv::GaussianBlur(mask, masks[i], cv::Size(neighborhood_size*gauss_factor*2+1, neighborhood_size*gauss_factor*2+1), 0);
 		}
 
-	for(auto& mask: masks)
-	{	
-		cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
-		cv::imshow( "Display window", mask );                   // Show our image inside it.
-		cv::waitKey(0); 
+		for(auto& mask: masks)
+		{	
+			cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
+			cv::imshow( "Display window", mask );                   // Show our image inside it.
+			cv::waitKey(0); 
+		}
+
 	}
-	return ;
 /*
-	//Inflating masks and blur
-	std::cout << "Improving masks\n";
-	std::vector<cv::Mat> nmasks(masks.size());
-	
-	for(int i = 0; i < masks.size(); ++i)
-	{
-		auto mask = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
-		nmasks[i] = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
-		//Inflating
-		auto paint = [&] (int i0, int j0) {
-			for(int k = -neighborhood_size; k <= neighborhood_size; ++k)
-				for(int l = -neighborhood_size; l <= neighborhood_size; ++l)
-					if(i0+k >= 0 && i0+k < image.rows && j0+l >=0 && j0+l < image.cols)
-						mask.at<cv::Vec3b>(i0+k, j0+l) = cv::Vec3b(255,255,255);
-		};
-
-		for(int k = 0; k < image.rows - 1; ++k) //Awful thing
-			for(int l = 0; l < image.cols; ++l)
-				if(masks[i].at<cv::Vec3b>(k, l)[0] != 0)
-					paint(k, l);
-		//Blur
-//		mask.copyTo(nmasks[i]);
-		cv::GaussianBlur(mask, nmasks[i], cv::Size(neighborhood_size*gauss_factor*2+1, neighborhood_size*gauss_factor*2+1), 0);
-	}
-
-
 	processed = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
 	//Contrast
 	std::cout << "Contrast processing\n";
