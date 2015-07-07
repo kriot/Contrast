@@ -7,10 +7,11 @@
 
 const int distance = 6;
 const double diff_factor = 0.01;
-const int neighborhood_size = 3; //for masks
-const double gauss_factor = 6;
-const int hist_scale = 1;
+const int neighborhood_size = 6; //for masks
+const double gauss_factor = 4;
+const int hist_scale = 2;
 
+const double alpha = 0.001; //in place of diff factor
 
 std::vector<cv::Vec3b> baseColor{ //before transformation
 	{39, 44, 40}, //green
@@ -19,8 +20,8 @@ std::vector<cv::Vec3b> baseColor{ //before transformation
 };
 
 std::vector<cv::Vec3b> color{ //we want to
-	{0, 255, 0}, 
-	{150, 150, 150},
+	{12, 169, 12}, 
+	{126, 112, 95},
 	{17, 78, 62},
 };
 
@@ -65,8 +66,6 @@ std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::M
 	return std::make_tuple(cv::Vec3b(mid[0]/(count+1), mid[1]/(count+1), mid[2]/(count+1)), min, max);
 }
 
-cv::Mat processed; //Pixels flag
-
 void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv::Vec3b max, cv::Vec3b min)
 {
 	//Function constructoring
@@ -91,21 +90,18 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 	std::cout << "A: " << a << ", b: " << b <<"\n";
 	if (a < 1)
 		return;
-	b -= std::abs(b)/2;
 	auto f = [=](int x) { return a*x + b; };
 	//Applying
 	for(int i = 0; i < img.rows - 1; ++i) //Awful thing
 		for(int j = 0; j < img.cols; ++j)
-//			if(processed.at<cv::Vec3b>(i, j)[0] == 0) //We don't need it more.
-				for(int ch = 0; ch < 3; ++ch)
-				{
-					int v = img.at<cv::Vec3b>(i, j)[ch];
-					double k = mask.at<cv::Vec3b>(i, j)[0] / 255.;
-					img.at<cv::Vec3b>(i, j)[ch] = std::max(std::min(
-								f(v) * k + v * (1 - k)
-								, 255.), 0.); 
-					processed.at<cv::Vec3b>(i, j)[0] = 100;
-				}
+			for(int ch = 0; ch < 3; ++ch)
+			{
+				int v = img.at<cv::Vec3b>(i, j)[ch];
+				double k = mask.at<cv::Vec3b>(i, j)[0] / 255.;
+				img.at<cv::Vec3b>(i, j)[ch] = std::max(std::min(
+							f(v) * k + v * (1 - k)
+							, 255.), 0.); 
+			}
 	
 }
 
@@ -152,14 +148,15 @@ void autoContrast(cv::Mat& image)
 							0 < k1 && k1 < 256 &&
 							hist[i1][j1][k1] < hist[i][j][k] - s*diff_factor;
 					};
-					if(check_point(i - distance, j - distance, k - distance) &&
+/*					if(check_point(i - distance, j - distance, k - distance) &&
 					   check_point(i - distance, j - distance, k + distance) &&
 					   check_point(i - distance, j + distance, k - distance) &&
 					   check_point(i - distance, j + distance, k + distance) &&
 					   check_point(i + distance, j - distance, k - distance) &&
 					   check_point(i + distance, j - distance, k + distance) &&
 					   check_point(i + distance, j + distance, k - distance) &&
-					   check_point(i + distance, j + distance, k + distance))
+					   check_point(i + distance, j + distance, k + distance))*/
+					if(hist[i][j][k] > s*alpha)
 					{
 						peaks.push_back(cv::Vec3b(i, j, k));
 					}
@@ -169,6 +166,13 @@ void autoContrast(cv::Mat& image)
 		{
 			auto dist = [](cv::Vec3b a, cv::Vec3b b)
 			{
+				cv::Mat ma(1, 1, CV_8UC3);
+				ma.at<cv::Vec3b>(0, 0) = a;
+				cv::cvtColor(ma, ma, CV_RGB2HSV);
+				cv::Mat mb(1, 1, CV_8UC3);
+				mb.at<cv::Vec3b>(0, 0) = b;
+				cv::cvtColor(mb, mb, CV_RGB2HSV);
+			//	return pow(ma.at<cv::Vec3b>(0, 0)[0] - mb.at<cv::Vec3b>(0, 0)[0], 2);
 				return pow(a[0] - b[0], 2) + pow(a[1] - b[1], 2) + pow(a[2] - b[2], 2);
 			};
 			int closer = 0;
@@ -179,12 +183,12 @@ void autoContrast(cv::Mat& image)
 			}
 			freqColor[closer].insert(p);
 		}
-/*		for(int i = 0; i < freqColor.size(); ++i)
+		for(int i = 0; i < freqColor.size(); ++i)
 		{
 			std::cout << "Color " << i << ":\n";
 			for(auto p: freqColor[i])
 				std::cout << "Peak: " << (int)p[0] << ", " << (int)p[1] << ", " << (int)p[2] <<"\n";
-		}*/
+		}
 	}
 	//Making masks
 	std::cout << "Making masks\n";
@@ -203,6 +207,14 @@ void autoContrast(cv::Mat& image)
 				if(color != -1)
 					masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(255, 255, 255);
 			}
+
+		for(auto& mask: masks)
+		{	
+			cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
+			cv::imshow( "Display window", mask );                   // Show our image inside it.
+			cv::waitKey(0); 
+		}
+
 
 		//Inflating masks and blur
 		std::cout << "Improving masks\n";
@@ -226,27 +238,17 @@ void autoContrast(cv::Mat& image)
 			cv::GaussianBlur(mask, masks[i], cv::Size(neighborhood_size*gauss_factor*2+1, neighborhood_size*gauss_factor*2+1), 0);
 		}
 
-		for(auto& mask: masks)
-		{	
-			cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
-			cv::imshow( "Display window", mask );                   // Show our image inside it.
-			cv::waitKey(0); 
-		}
-
 	}
-/*
-	processed = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
 	//Contrast
 	std::cout << "Contrast processing\n";
-	for(int i = 0; i < nmasks.size(); ++i)
+	for(int i = 0; i < masks.size(); ++i)
 	{
-		auto t = getForMask(image, nmasks[i]);
+		auto t = getForMask(image, masks[i]);
 		auto mid = std::get<0>(t);
 		auto min = std::get<1>(t);
 		auto max = std::get<2>(t);
-		auto middle = [&] (cv::Vec3b m) {return cv::Vec3b((m[0] + b)/2, (m[1] + g)/2, (m[2] + r)/2);};
-		contrast(image, nmasks[i], mid, color[i], max, min);		
-	}*/
+		contrast(image, masks[i], mid, color[i], max, min);		
+	}
 }
 
 int main(int argc, char** argv)
