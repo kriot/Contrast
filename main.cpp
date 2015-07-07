@@ -13,14 +13,34 @@ const int hist_scale = 2;
 
 const double alpha = 0.001; //in place of diff factor
 
-std::vector<cv::Vec3b> baseColor{ //before transformation
-	{39, 44, 40}, //green
-	{76, 83, 90}, //gray
-	{53, 53, 44}, //brown
+//Dist
+//OpenCV HSV: H [0-180], S [0-255], V [0-255]
+const int gray_s = 25;
+const int black_v = 127;
+const double inf_dist = 1000.;
+
+struct BaseColor
+{
+	enum class Type {Colorful, White, Black};
+
+	int Hbegin;
+	int Hend;
+	Type type;
+};
+
+std::vector<BaseColor> baseColor{ //before transformation
+//	{39, 44, 40}, //green
+//	{76, 83, 90}, //gray
+//	{53, 53, 44}, //brown
+	{32, 70, BaseColor::Type::Colorful},
+	{0, 0, BaseColor::Type::White},
+	{12, 20, BaseColor::Type::Colorful},
+	{20, 32, BaseColor::Type::Colorful}
 };
 
 std::vector<cv::Vec3b> color{ //we want to
 	{12, 169, 12}, 
+	{126, 112, 95},
 	{126, 112, 95},
 	{17, 78, 62},
 };
@@ -105,6 +125,39 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 	
 }
 
+double dist(cv::Vec3b a, BaseColor b)
+{
+	cv::Mat ma(1, 1, CV_8UC3);
+	ma.at<cv::Vec3b>(0, 0) = a;
+	cv::cvtColor(ma, ma, CV_RGB2HSV);
+	auto ha = ma.at<cv::Vec3b>(0, 0);
+	//					std::cout << (int)ha[0] << " " << (int)ha[1] << " " << (int)ha[2] <<"\n";
+	BaseColor::Type type;
+	if(ha[1] < gray_s)
+	{
+		if(ha[2] < black_v)
+			type = BaseColor::Type::Black;
+		else
+			type = BaseColor::Type::White;
+	}	
+	else
+		type = BaseColor::Type::Colorful;
+	if(type == b.type)
+	{
+		if(type == BaseColor::Type::Colorful)
+		{
+			if( ha[0] > b.Hbegin && ha[0] < b.Hend)
+				return 0.0;
+			else
+				return inf_dist;
+		}
+		else
+			return 0.0;
+	}
+	else
+		return inf_dist;
+}
+
 void autoContrast(cv::Mat& image)
 {
 	auto comp = [](cv::Vec3b a, cv::Vec3b b){
@@ -117,79 +170,6 @@ void autoContrast(cv::Mat& image)
 		return false;	
 	};
 	std::vector<std::set<cv::Vec3b, decltype(comp)>> freqColor(baseColor.size(), std::set<cv::Vec3b, decltype(comp)>(comp));
-	//Base colors
-	{
-		//Calculatioing histogram (3D)
-		std::cout << "Calculating histogram\n";
-		std::vector<std::vector<std::vector<int>>> hist(256/hist_scale, 
-				std::vector<std::vector<int>>(256/hist_scale, 
-					std::vector<int>(256/hist_scale, 
-						0)));
-		for(int i = 0; i < image.rows; ++i)
-			for(int j = 0; j < image.cols; ++j)
-			{
-				auto c = image.at<cv::Vec3b>(i, j);
-				hist[c[0]/hist_scale][c[1]/hist_scale][c[2]/hist_scale]++;
-			}
-
-		//Choosing the peaks
-		std::cout << "Peaks\n";
-		long long s = image.rows * image.cols/pow(hist.size(), 3); //image area
-		std::vector<cv::Vec3b> peaks;
-		for(int i = 0; i < hist.size(); ++i)
-			for(int j = 0; j < hist[i].size(); ++j)
-				for(int k = 0; k < hist[i][j].size(); ++k)
-				{
-					auto check_point = [&](int i1, int j1, int k1) 
-					{
-						return 
-							0 < i1 && i1 < 256 &&
-							0 < j1 && j1 < 256 &&
-							0 < k1 && k1 < 256 &&
-							hist[i1][j1][k1] < hist[i][j][k] - s*diff_factor;
-					};
-/*					if(check_point(i - distance, j - distance, k - distance) &&
-					   check_point(i - distance, j - distance, k + distance) &&
-					   check_point(i - distance, j + distance, k - distance) &&
-					   check_point(i - distance, j + distance, k + distance) &&
-					   check_point(i + distance, j - distance, k - distance) &&
-					   check_point(i + distance, j - distance, k + distance) &&
-					   check_point(i + distance, j + distance, k - distance) &&
-					   check_point(i + distance, j + distance, k + distance))*/
-					if(hist[i][j][k] > s*alpha)
-					{
-						peaks.push_back(cv::Vec3b(i, j, k));
-					}
-				}
-		//Classification
-		for(cv::Vec3b p: peaks)
-		{
-			auto dist = [](cv::Vec3b a, cv::Vec3b b)
-			{
-				cv::Mat ma(1, 1, CV_8UC3);
-				ma.at<cv::Vec3b>(0, 0) = a;
-				cv::cvtColor(ma, ma, CV_RGB2HSV);
-				cv::Mat mb(1, 1, CV_8UC3);
-				mb.at<cv::Vec3b>(0, 0) = b;
-				cv::cvtColor(mb, mb, CV_RGB2HSV);
-			//	return pow(ma.at<cv::Vec3b>(0, 0)[0] - mb.at<cv::Vec3b>(0, 0)[0], 2);
-				return pow(a[0] - b[0], 2) + pow(a[1] - b[1], 2) + pow(a[2] - b[2], 2);
-			};
-			int closer = 0;
-			for(int i = 0; i < baseColor.size(); ++i)
-			{
-				if(dist(p, baseColor[i]) < dist(p, baseColor[closer]))
-					closer = i;
-			}
-			freqColor[closer].insert(p);
-		}
-		for(int i = 0; i < freqColor.size(); ++i)
-		{
-			std::cout << "Color " << i << ":\n";
-			for(auto p: freqColor[i])
-				std::cout << "Peak: " << (int)p[0] << ", " << (int)p[1] << ", " << (int)p[2] <<"\n";
-		}
-	}
 	//Making masks
 	std::cout << "Making masks\n";
 	std::vector<cv::Mat> masks(freqColor.size());
@@ -200,12 +180,14 @@ void autoContrast(cv::Mat& image)
 			for(int j = 0; j < image.cols; ++j)
 			{	
 				auto p = image.at<cv::Vec3b>(i, j);
-				int color = -1;
-				for(int i = 0; i < freqColor.size() && color == -1; ++i)
-					if(freqColor[i].find(p) != freqColor[i].end())
-						color = i;
-				if(color != -1)
-					masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(255, 255, 255);
+				int closer = -1;
+				for(int i = 0; i < baseColor.size(); ++i)
+				{
+					if(dist(p, baseColor[i]) < inf_dist)
+						closer = i;
+				}
+				if(closer != -1)
+					masks[closer].at<cv::Vec3b>(i, j) = cv::Vec3b(255, 255, 255);
 			}
 
 		for(auto& mask: masks)
