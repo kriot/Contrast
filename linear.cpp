@@ -17,35 +17,6 @@ std::vector<long long> calcHist(const cv::Mat& img, int ch)
 	return res;
 }
 
-std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::Mat& mask) //mid, min, max
-{
-	cv::Vec3b max(0,0,0);
-	cv::Vec3b min(255,255,255);
-	long long count = 0;
-	std::vector<long long> mid{0, 0, 0};
-	for(int i = 0; i < img.rows - 1; ++i) //Awful thing
-		for(int j = 0; j < img.cols; ++j)
-			if(mask.at<cv::Vec3b>(i, j)[0] > 0)
-			{
-				auto p = img.at<cv::Vec3b>(i, j);
-				
-				mid[0] += p[0];
-				mid[1] += p[1];
-				mid[2] += p[2];
-				count++;
-
-				for(int i = 0; i < 3; ++i)
-				{
-					if(p[i] > max[i]) 
-						max[i] = p[i];
-					if(p[i] < min[i])
-						min[i] = p[i];
-				}
-			}
-
-	return std::make_tuple(cv::Vec3b(mid[0]/(count+1), mid[1]/(count+1), mid[2]/(count+1)), min, max);
-}
-
 int main(int argc, char** argv)
 {
 	if(argc == 1)
