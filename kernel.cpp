@@ -37,25 +37,27 @@ int main(int argc, char** argv)
 	//Contrast
 	for(int i = 0; i < image.rows - 1; ++i) //Awful thing
 		for(int j = 0; j < image.cols; ++j)
+		{
+			std::vector<std::vector<long long>> hist = {
+				calcHist(image, 0, std::max(i - kernel_size, 0), std::max(j - kernel_size, 0), std::min(i + kernel_size, image.rows), std::min(j + kernel_size, image.cols)), 
+				calcHist(image, 1, std::max(i - kernel_size, 0), std::max(j - kernel_size, 0), std::min(i + kernel_size, image.rows), std::min(j + kernel_size, image.cols)), 
+				calcHist(image, 2, std::max(i - kernel_size, 0), std::max(j - kernel_size, 0), std::min(i + kernel_size, image.rows), std::min(j + kernel_size, image.cols))};
+			int begin = 0, end = 255;
+
+			auto y = [=](int begin){ return 0.11*hist[0][begin] + 0.59*hist[1][begin] + 0.3*hist[2][begin]; };
+			while(y(begin) < alpha*kernel_size*kernel_size && begin < end - 1)
+				begin++;
+			while(y(end) < alpha*kernel_size*kernel_size && begin < end - 1)
+				end--;
 			for(int ch = 0; ch < 3; ++ch)
 			{
-				int begin = 0, end = 255;
-				std::vector<std::vector<long long>> hist = {
-					calcHist(image, 0, std::max(i - kernel_size, 0), std::max(j - kernel_size, 0), std::min(i + kernel_size, image.rows), std::min(j + kernel_size, image.cols)), 
-					calcHist(image, 1, std::max(i - kernel_size, 0), std::max(j - kernel_size, 0), std::min(i + kernel_size, image.rows), std::min(j + kernel_size, image.cols)), 
-					calcHist(image, 2, std::max(i - kernel_size, 0), std::max(j - kernel_size, 0), std::min(i + kernel_size, image.rows), std::min(j + kernel_size, image.cols))};
-
-				auto y = [=](int begin){ return 0.11*hist[0][begin] + 0.59*hist[1][begin] + 0.3*hist[2][begin]; };
-				while(y(begin) < alpha*kernel_size*kernel_size && begin < end - 1)
-					begin++;
-				while(y(end) < alpha*kernel_size*kernel_size && begin < end - 1)
-					end--;
 
 				auto f = [&](int x) { return std::min(std::max((x - begin) * 255 / (end - begin), 0), 255); };
 
 				int v = image.at<cv::Vec3b>(i, j)[ch];
 				image.at<cv::Vec3b>(i, j)[ch] = f(v);
 			}
+		}
 
 	
 	cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
