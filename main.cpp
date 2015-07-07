@@ -9,21 +9,25 @@ const int distance = 6;
 const double diff_factor = 0.01;
 const int neighborhood_size = 10; //for masks
 const double gauss_factor = 2;
-std::vector<cv::Vec3b> color{
-	{0, 0, 0}, 
-	{0, 0, 150},
-	{0, 250, 0},
-	{34, 250, 250},
-	{203, 104, 0},
-	{200, 0, 200},
-	{0, 200, 0},
-	{200, 200, 200},
-	
+const int hist_scale = 1;
+
+
+std::vector<cv::Vec3b> baseColor{ //before transformation
+	{39, 44, 40}, //green
+	{76, 83, 90}, //gray
+	{53, 53, 44}, //brown
 };
 
-std::vector<long long> calcHist(const cv::Mat& img, int ch)
+std::vector<cv::Vec3b> color{ //we want to
+	{0, 255, 0}, 
+	{150, 150, 150},
+	{17, 78, 62},
+};
+
+
+std::vector<int> calcHist(const cv::Mat& img, int ch)
 {
-	std::vector<long long> res(256, 0);
+	std::vector<int> res(256, 0);
 	for(int i = 0; i < img.rows - 1; ++i) //Awful thing. Because the last row doesnt work correctly (seg.fault)
 		for(int j = 0; j < img.cols; ++j)
 		{
@@ -105,48 +109,82 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 	
 }
 
-int main(int argc, char** argv)
+void autoContrast(cv::Mat& image)
 {
-	if(argc == 1)
+	auto comp = [](cv::Vec3b a, cv::Vec3b b){
+		if(a[0] != b[0])
+			return a[0] < b[0];
+		if(a[1] != b[1])
+			return a[1] < b[1];
+		if(a[2] != b[2])
+			return a[2] < b[2];
+		return false;	
+	};
+	std::vector<std::set<cv::Vec3b, decltype(comp)>> freqColor(baseColor.size(), std::set<cv::Vec3b, decltype(comp)>(comp));
+	//Base colors
 	{
-		std::cerr << "Image name is needed\n";
-		return -1;
-	}
-	cv::Mat image = cv::imread(argv[1], CV_LOAD_IMAGE_COLOR);
-	if(!image.data)
-	{
-		std::cerr << "Cant read image\n";
-		return -1;
-	}
-	std::cout << "Image is read\n";
-	processed = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
-	//Calculatioing histograms
-	std::vector<std::vector<int>> hist = {calcHist(image, 0), calcHist(image, 1), calcHist(image, 2)};
-	std::cout << "Hists are done\n";
-
-	// Printing hist
-	for(int ch = 0; ch < 3; ++ch)
-	{
-		for(auto v: hist[ch])
-			std::cout << v << " ";
-		std::cout << "\n";
-	}
-	
-	//Choosing the peaks
-	long long s = image.rows * image.cols;
-	std::vector<std::set<int>> peaks;
-	for(auto h: hist)
-	{
-		peaks.push_back(std::set<int>());
-		for(int i = 0; i < 256; ++i)
-		{
-			if((i-distance > 0 && h[i-distance] < h[i] - s*diff_factor) && 
-			   (i+distance < 256 && h[i+distance] < h[i] - s*diff_factor))
+		//Calculatioing histogram (3D)
+		std::vector<std::vector<std::vector<int>>> hist(256/hist_scale, 
+				std::vector<std::vector<int>>(256/hist_scale, 
+					std::vector<int>(256/hist_scale, 
+						0)));
+		for(int i = 0; i < image.rows; ++i)
+			for(int j = 0; j < image.cols; ++j)
 			{
-				peaks.back().insert(i);
+				auto c = image.at<cv::Vec3b>(i, j);
+				hist[c[0]/hist_scale][c[1]/hist_scale][c[2]/hist_scale]++;
 			}
+
+		//Choosing the peaks
+		long long s = image.rows * image.cols/pow(hist.size(), 3); //image area
+		std::vector<cv::Vec3b> peaks;
+		for(int i = 0; i < hist.size(); ++i)
+			for(int j = 0; j < hist[i].size(); ++j)
+				for(int k = 0; k < hist[i][j].size(); ++k)
+				{
+					auto check_point = [&](int i1, int j1, int k1) 
+					{
+						return 
+							0 < i1 && i1 < 256 &&
+							0 < j1 && j1 < 256 &&
+							0 < k1 && k1 < 256 &&
+							hist[i1][j1][k1] < hist[i][j][k] - s*diff_factor;
+					};
+					if(check_point(i - distance, j - distance, k - distance) &&
+					   check_point(i - distance, j - distance, k + distance) &&
+					   check_point(i - distance, j + distance, k - distance) &&
+					   check_point(i - distance, j + distance, k + distance) &&
+					   check_point(i + distance, j - distance, k - distance) &&
+					   check_point(i + distance, j - distance, k + distance) &&
+					   check_point(i + distance, j + distance, k - distance) &&
+					   check_point(i + distance, j + distance, k + distance))
+					{
+						peaks.push_back(cv::Vec3b(i, j, k));
+					}
+				}
+		//Classification
+		for(cv::Vec3b p: peaks)
+		{
+			auto dist = [](cv::Vec3b a, cv::Vec3b b)
+			{
+				return pow(a[0] - b[0], 2) + pow(a[1] - b[1], 2) + pow(a[2] - b[2], 2);
+			};
+			int closer = 0;
+			for(int i = 0; i < baseColor.size(); ++i)
+			{
+				if(dist(p, baseColor[i]) < dist(p, baseColor[closer]))
+					closer = i;
+			}
+			freqColor[closer].insert(p);
+		}
+		for(int i = 0; i < freqColor.size(); ++i)
+		{
+			std::cout << "Color " << i << ":\n";
+			for(auto p: freqColor[i])
+				std::cout << "Peak: " << (int)p[0] << ", " << (int)p[1] << ", " << (int)p[2] <<"\n";
 		}
 	}
+/*
 	for(auto b: peaks)
 	{
 		for(auto color_ch: b)
@@ -200,6 +238,14 @@ int main(int argc, char** argv)
 			masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(255, 255, 255);
 		}
 
+	for(int i = 0; i < 9; ++i)
+	{	
+		cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
+		cv::imshow( "Display window", masks[i] );                   // Show our image inside it.
+		cv::waitKey(0); 
+	}
+	return 0;
+
 	//Inflating masks and blur
 	std::cout << "Improving masks\n";
 	std::vector<cv::Mat> nmasks(masks.size());
@@ -225,13 +271,8 @@ int main(int argc, char** argv)
 		cv::GaussianBlur(mask, nmasks[i], cv::Size(neighborhood_size*gauss_factor*2+1, neighborhood_size*gauss_factor*2+1), 0);
 	}
 
-	for(int i = 0; i < 9; ++i)
-	{	
-		cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
-		cv::imshow( "Display window", nmasks[i] );                   // Show our image inside it.
-		cv::waitKey(0); 
-	}
 
+	processed = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
 	//Contrast
 	std::cout << "Contrast processing\n";
 	for(int i = 0; i < nmasks.size(); ++i)
@@ -242,7 +283,28 @@ int main(int argc, char** argv)
 		auto max = std::get<2>(t);
 		auto middle = [&] (cv::Vec3b m) {return cv::Vec3b((m[0] + b)/2, (m[1] + g)/2, (m[2] + r)/2);};
 		contrast(image, nmasks[i], mid, color[i], max, min);		
+	}*/
+}
+
+int main(int argc, char** argv)
+{
+	if(argc == 1)
+	{
+		std::cerr << "Image name is needed\n";
+		return -1;
 	}
+	cv::Mat image = cv::imread(argv[1], CV_LOAD_IMAGE_COLOR);
+	if(!image.data)
+	{
+		std::cerr << "Cant read image\n";
+		return -1;
+	}
+	std::cout << "Image is read\n";
+	
+	//Processing
+	autoContrast(image);
+
+	//Out
 	cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
 	cv::imshow( "Display window", image );                   // Show our image inside it.
 	cv::waitKey(0); 
