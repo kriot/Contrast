@@ -24,7 +24,7 @@ std::vector<cv::Vec3b> color{
 std::vector<long long> calcHist(const cv::Mat& img, int ch)
 {
 	std::vector<long long> res(256, 0);
-	for(int i = 0; i < img.rows - 1; ++i) //Awful thing
+	for(int i = 0; i < img.rows - 1; ++i) //Awful thing. Because the last row doesnt work correctly (seg.fault)
 		for(int j = 0; j < img.cols; ++j)
 		{
 			res[img.at<cv::Vec3b>(i, j)[ch]]++;
@@ -61,7 +61,7 @@ std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::M
 	return std::make_tuple(cv::Vec3b(mid[0]/(count+1), mid[1]/(count+1), mid[2]/(count+1)), min, max);
 }
 
-cv::Mat processed;
+cv::Mat processed; //Pixels flag
 
 void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv::Vec3b max, cv::Vec3b min)
 {
@@ -92,7 +92,7 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 	//Applying
 	for(int i = 0; i < img.rows - 1; ++i) //Awful thing
 		for(int j = 0; j < img.cols; ++j)
-			if(true||processed.at<cv::Vec3b>(i, j)[0] == 0)
+//			if(processed.at<cv::Vec3b>(i, j)[0] == 0) //We don't need it more.
 				for(int ch = 0; ch < 3; ++ch)
 				{
 					int v = img.at<cv::Vec3b>(i, j)[ch];
