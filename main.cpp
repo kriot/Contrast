@@ -184,68 +184,32 @@ void autoContrast(cv::Mat& image)
 				std::cout << "Peak: " << (int)p[0] << ", " << (int)p[1] << ", " << (int)p[2] <<"\n";
 		}
 	}
-/*
-	for(auto b: peaks)
-	{
-		for(auto color_ch: b)
-			std::cout << color_ch << " ";
-		std::cout << "\n";
-	}
 	//Making masks
 	std::cout << "Making masks\n";
-	double b = 0;
-	for(auto _b: peaks[0])
-	{
-		b += _b;
-	}
-	b /= peaks[0].size();
-	double g = 0;
-	for(auto _g: peaks[1])
-	{
-		g += _g;
-	}
-	g /= peaks[1].size();
-	double r = 0;
-	for(auto _r: peaks[2])
-	{
-		r += _r;
-	}
-	r /= peaks[2].size();
-	std::vector<cv::Mat> masks(9);
+	std::vector<cv::Mat> masks(freqColor.size());
 	for(auto& mask: masks)
 		mask = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
+
 	for(int i = 0; i < image.rows - 1; ++i) //Awful thing
 		for(int j = 0; j < image.cols; ++j)
 		{	
 			auto p = image.at<cv::Vec3b>(i, j);
-//			auto isThere = [&](int v, int c) { return peaks[c].find(v) != peaks[c].end(); };
-//			int color = isThere(p[0], 0) << 0 | isThere(p[1], 1) << 1 | isThere(p[2], 2) << 2;
-//			masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(isThere(p[0],0)*255, isThere(p[1],1)*255, isThere(p[2],2)*255);
-			//another way
-			
-			std::vector<std::tuple<int, int, int>> defColors({std::make_tuple(-10,-10,-10), std::make_tuple(-10, -10, r), std::make_tuple(-10, g, -10), std::make_tuple(0, 255, 255), std::make_tuple(b, -10, -10), std::make_tuple(255, 0, 255), std::make_tuple(255, 255, 0), std::make_tuple(255, 255, 255)});
-			std::vector<int> dist;
-			for(auto c: defColors)
-				dist.push_back((std::get<0>(c)-p[0])*(std::get<0>(c)-p[0])+(std::get<1>(c)-p[1])*(std::get<1>(c)-p[1])+(std::get<2>(c)-p[2])*(std::get<2>(c)-p[2]));
-			int color = 0;
-			for(int i = 0; i < defColors.size(); ++i)
-				if(dist[color] > dist[i])
+			int color = -1;
+			for(int i = 0; i < freqColor.size() && color == -1; ++i)
+				if(freqColor[i].find(p) != freqColor[i].end())
 					color = i;
-
-			//colorful
-			//masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(std::get<0>(defColors[color]), std::get<1>(defColors[color]), std::get<2>(defColors[color]));
-			//for work
-			masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(255, 255, 255);
+			if(color != -1)
+				masks[color].at<cv::Vec3b>(i, j) = cv::Vec3b(255, 255, 255);
 		}
 
-	for(int i = 0; i < 9; ++i)
+	for(auto& mask: masks)
 	{	
 		cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
-		cv::imshow( "Display window", masks[i] );                   // Show our image inside it.
+		cv::imshow( "Display window", mask );                   // Show our image inside it.
 		cv::waitKey(0); 
 	}
-	return 0;
-
+	return ;
+/*
 	//Inflating masks and blur
 	std::cout << "Improving masks\n";
 	std::vector<cv::Mat> nmasks(masks.size());
