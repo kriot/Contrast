@@ -20,6 +20,7 @@ std::vector<cv::Vec3b> color{
 	{200, 200, 200},
 	
 };
+
 std::vector<long long> calcHist(const cv::Mat& img, int ch)
 {
 	std::vector<long long> res(256, 0);
@@ -120,7 +121,7 @@ int main(int argc, char** argv)
 	std::cout << "Image is read\n";
 	processed = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
 	//Calculatioing histograms
-	std::vector<std::vector<long long>> hist = {calcHist(image, 0), calcHist(image, 1), calcHist(image, 2)};
+	std::vector<std::vector<int>> hist = {calcHist(image, 0), calcHist(image, 1), calcHist(image, 2)};
 	std::cout << "Hists are done\n";
 
 	// Printing hist
