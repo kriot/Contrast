@@ -166,6 +166,7 @@ void autoContrast(cv::Mat& image)
 	std::vector<cv::Mat> masks(freqColor.size());
 	for(auto& mask: masks)
 		mask = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
+	cv::Mat outerMask(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
 	{
 		for(int i = 0; i < image.rows - 1; ++i) //Awful thing
 			for(int j = 0; j < image.cols; ++j)
@@ -217,6 +218,20 @@ void autoContrast(cv::Mat& image)
 			cv::imshow( "Display window", mask );                   // Show our image inside it.
 			cv::waitKey(0); 
 		}
+
+		for(int i = 0; i < outerMask.rows; ++i)
+			for(int j = 0; j < outerMask.cols; ++j)
+			{
+				int sum = 0;
+				for(auto& mask: masks)
+					sum += mask.at<cv::Vec3b>(i, j)[0];
+				outerMask.at<cv::Vec3b>(i, j) = cv::Vec3b(std::max(0, 255 - sum), std::max(0, 255 - sum), std::max(0, 255 - sum));
+			}
+
+		cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
+		cv::imshow( "Display window", outerMask );                   // Show our image inside it.
+		cv::waitKey(0); 
+
 
 	}
 	//Contrast
