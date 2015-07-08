@@ -42,7 +42,7 @@ std::vector<cv::Vec3b> color{ //we want to
 std::vector<int> calcHist(const cv::Mat& img, int ch)
 {
 	std::vector<int> res(256, 0);
-	for(int i = 0; i < img.rows - 1; ++i) //Awful thing. Because the last row doesnt work correctly (seg.fault)
+	for(int i = 0; i < img.rows; ++i) 
 		for(int j = 0; j < img.cols; ++j)
 		{
 			res[img.at<cv::Vec3b>(i, j)[ch]]++;
@@ -56,7 +56,7 @@ std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::M
 	cv::Vec3b min(255,255,255);
 	long long count = 0;
 	std::vector<long long> mid{0, 0, 0};
-	for(int i = 0; i < img.rows - 1; ++i) //Awful thing
+	for(int i = 0; i < img.rows; ++i) 
 		for(int j = 0; j < img.cols; ++j)
 			if(mask.at<cv::Vec3b>(i, j)[0] > 0)
 			{
@@ -116,7 +116,7 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 	auto f = [=](int x) { return a*x + b; };
 	std::cout << "Applaying\n";
 	//Applying
-	for(int i = 0; i < img.rows - 1; ++i) //Awful thing
+	for(int i = 0; i < img.rows; ++i) 
 		for(int j = 0; j < img.cols; ++j)
 			for(int ch = 0; ch < 3; ++ch)
 			{
@@ -175,7 +175,7 @@ void autoContrast(cv::Mat& image)
 		mask = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
 	cv::Mat outerMask(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
 	{
-		for(int i = 0; i < image.rows - 1; ++i) //Awful thing
+		for(int i = 0; i < image.rows; ++i) 
 			for(int j = 0; j < image.cols; ++j)
 			{	
 				auto p = image.at<cv::Vec3b>(i, j);
@@ -211,7 +211,7 @@ void autoContrast(cv::Mat& image)
 							mask.at<cv::Vec3b>(i0+k, j0+l) = cv::Vec3b(255,255,255);
 			};
 
-			for(int k = 0; k < image.rows - 1; ++k) //Awful thing
+			for(int k = 0; k < image.rows; ++k) 
 				for(int l = 0; l < image.cols; ++l)
 					if(masks[i].at<cv::Vec3b>(k, l)[0] != 0)
 						paint(k, l);
