@@ -103,7 +103,7 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 	std::cout << "A: " << a << ", b: " << b <<"\n";
 	if (a < 1)
 		return;
-	if (a > a_max)
+	if (a > a_max) //Limitation is needed because else there is too big color difference
 	{
 		std::cout << "A limitation\n";
 		double rotation_point = (mid[0] + mid[1] + mid[2]) / 3;
@@ -113,17 +113,17 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 		b += db;
 		std::cout << "New A: " << a << ", b: " << b <<"\n";
 	}
-	auto f = [=](int x) { return a*x + b; };
+	auto Fpixel = [=](int x) { return a*x + b; };
 	std::cout << "Applaying\n";
 	//Applying
 	for(int i = 0; i < img.rows; ++i) 
 		for(int j = 0; j < img.cols; ++j)
 			for(int ch = 0; ch < 3; ++ch)
 			{
-				int v = img.at<cv::Vec3b>(i, j)[ch];
+				int p = img.at<cv::Vec3b>(i, j)[ch];
 				double k = mask.at<cv::Vec3b>(i, j)[0] / 255.;
 				img.at<cv::Vec3b>(i, j)[ch] = std::max(std::min(
-							f(v) * k + v * (1 - k)
+							Fpixel(p) * k + p * (1 - k)
 							, 255.), 0.); 
 			}
 	
@@ -131,10 +131,12 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 
 double dist(cv::Vec3b a, BaseColor b)
 {
+	//Converting a to HSV
 	cv::Mat ma(1, 1, CV_8UC3);
 	ma.at<cv::Vec3b>(0, 0) = a;
 	cv::cvtColor(ma, ma, CV_BGR2HSV);
 	auto ha = ma.at<cv::Vec3b>(0, 0);
+	
 	BaseColor::Type type;
 	if(ha[1] < gray_s && ha[2] > gray_v)
 		type = BaseColor::Type::Gray;
@@ -158,6 +160,7 @@ double dist(cv::Vec3b a, BaseColor b)
 
 void autoContrast(cv::Mat& image)
 {
+	//Comparator for set
 	auto comp = [](cv::Vec3b a, cv::Vec3b b){
 		if(a[0] != b[0])
 			return a[0] < b[0];
@@ -226,6 +229,7 @@ void autoContrast(cv::Mat& image)
 			cv::waitKey(0); 
 		}
 
+		//OuterMask generation
 		for(int i = 0; i < outerMask.rows; ++i)
 			for(int j = 0; j < outerMask.cols; ++j)
 			{
