@@ -6,7 +6,7 @@
 
 
 const int neighborhood_size = 3; //for masks
-const double gauss_factor = 4;
+const double gauss_factor = 8;
 
 const double a_max = 1.9; //limit contrast for small parts
 
@@ -27,7 +27,7 @@ struct BaseColor
 
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
 std::vector<BaseColor> baseColor{ //before transformation
-	{32, 70, BaseColor::Type::Colorful}, //Green
+	{30, 70, BaseColor::Type::Colorful}, //Green
 	{0, 0, BaseColor::Type::Gray},
 	{20, 32, BaseColor::Type::Colorful} //Brown
 };
