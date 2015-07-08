@@ -7,7 +7,7 @@
 
 const int distance = 6;
 const double diff_factor = 0.01;
-const int neighborhood_size = 6; //for masks
+const int neighborhood_size = 3; //for masks
 const double gauss_factor = 4;
 const int hist_scale = 2;
 
@@ -36,7 +36,7 @@ std::vector<BaseColor> baseColor{ //before transformation
 };
 
 std::vector<cv::Vec3b> color{ //we want to
-	{12, 169, 12}, 
+	{12, 72, 62}, 
 	{126, 112, 95},
 	{17, 78, 62},
 };
@@ -209,6 +209,13 @@ void autoContrast(cv::Mat& image)
 						paint(k, l);
 			//Blur
 			cv::GaussianBlur(mask, masks[i], cv::Size(neighborhood_size*gauss_factor*2+1, neighborhood_size*gauss_factor*2+1), 0);
+		}
+
+		for(auto& mask: masks)
+		{	
+			cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
+			cv::imshow( "Display window", mask );                   // Show our image inside it.
+			cv::waitKey(0); 
 		}
 
 	}
