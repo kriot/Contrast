@@ -5,13 +5,10 @@
 #include <opencv2/opencv.hpp>
 
 
-const int distance = 6;
-const double diff_factor = 0.01;
 const int neighborhood_size = 3; //for masks
 const double gauss_factor = 4;
-const int hist_scale = 2;
 
-const double alpha = 0.001; //in place of diff factor
+const double a_max = 1.9; //limit contrast for small parts
 
 //Dist
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
@@ -30,9 +27,9 @@ struct BaseColor
 
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
 std::vector<BaseColor> baseColor{ //before transformation
-	{32, 70, BaseColor::Type::Colorful},
+	{32, 70, BaseColor::Type::Colorful}, //Green
 	{0, 0, BaseColor::Type::Gray},
-	{20, 32, BaseColor::Type::Colorful}
+	{20, 32, BaseColor::Type::Colorful} //Brown
 };
 
 std::vector<cv::Vec3b> color{ //we want to
@@ -106,6 +103,16 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 	std::cout << "A: " << a << ", b: " << b <<"\n";
 	if (a < 1)
 		return;
+	if (a > a_max)
+	{
+		std::cout << "A limitation\n";
+		double rotation_point = (mid[0] + mid[1] + mid[2]) / 3;
+		std::cout << "Rotation point: "<< rotation_point << "\n";
+		double db = a*rotation_point - a_max*rotation_point;
+		a = a_max;
+		b += db;
+		std::cout << "New A: " << a << ", b: " << b <<"\n";
+	}
 	auto f = [=](int x) { return a*x + b; };
 	std::cout << "Applaying\n";
 	//Applying
@@ -244,6 +251,11 @@ void autoContrast(cv::Mat& image)
 		auto max = std::get<2>(t);
 		contrast(image, masks[i], mid, color[i], max, min);		
 	}
+	auto t = getForMask(image, outerMask);
+	auto mid = std::get<0>(t);
+	auto min = std::get<1>(t);
+	auto max = std::get<2>(t);
+	contrast(image, outerMask, mid, mid, max, min);		
 }
 
 int main(int argc, char** argv)
