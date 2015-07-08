@@ -15,26 +15,27 @@ const double alpha = 0.001; //in place of diff factor
 
 //Dist
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
-const int gray_s = 25;
-const int black_v = 127;
+const int gray_s = 18*255/100;
+const int gray_v = 30*255/100;
 const double inf_dist = 1000.;
 
 struct BaseColor
 {
-	enum class Type {Colorful, White, Black};
+	enum class Type {Colorful, Gray};
 
 	int Hbegin;
 	int Hend;
 	Type type;
 };
 
+//OpenCV HSV: H [0-180], S [0-255], V [0-255]
 std::vector<BaseColor> baseColor{ //before transformation
 //	{39, 44, 40}, //green
 //	{76, 83, 90}, //gray
 //	{53, 53, 44}, //brown
 	{32, 70, BaseColor::Type::Colorful},
-	{0, 0, BaseColor::Type::White},
-	{12, 20, BaseColor::Type::Colorful},
+	{0, 0, BaseColor::Type::Gray},
+//	{12, 20, BaseColor::Type::Colorful}, //gray
 	{20, 32, BaseColor::Type::Colorful}
 };
 
@@ -129,10 +130,11 @@ double dist(cv::Vec3b a, BaseColor b)
 {
 	cv::Mat ma(1, 1, CV_8UC3);
 	ma.at<cv::Vec3b>(0, 0) = a;
-	cv::cvtColor(ma, ma, CV_RGB2HSV);
+	cv::cvtColor(ma, ma, CV_BGR2HSV);
 	auto ha = ma.at<cv::Vec3b>(0, 0);
 	//					std::cout << (int)ha[0] << " " << (int)ha[1] << " " << (int)ha[2] <<"\n";
 	BaseColor::Type type;
+	/*
 	if(ha[1] < gray_s)
 	{
 		if(ha[2] < black_v)
@@ -140,6 +142,25 @@ double dist(cv::Vec3b a, BaseColor b)
 		else
 			type = BaseColor::Type::White;
 	}	
+	else
+		type = BaseColor::Type::Colorful;
+	if(type == b.type)
+	{
+		if(type == BaseColor::Type::Colorful)
+		{
+			if( ha[0] > b.Hbegin && ha[0] < b.Hend)
+				return 0.0;
+			else
+				return inf_dist;
+		}
+		else
+			return 0.0;
+	}
+	else
+		return inf_dist;
+	*/
+	if(ha[1] < gray_s && ha[2] > gray_v)
+		type = BaseColor::Type::Gray;
 	else
 		type = BaseColor::Type::Colorful;
 	if(type == b.type)
