@@ -15,7 +15,7 @@ const double alpha = 0.001; //in place of diff factor
 
 //Dist
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
-const int gray_s = 18*255/100;
+const int gray_s = 19*255/100;
 const int gray_v = 30*255/100;
 const double inf_dist = 1000.;
 
@@ -30,18 +30,13 @@ struct BaseColor
 
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
 std::vector<BaseColor> baseColor{ //before transformation
-//	{39, 44, 40}, //green
-//	{76, 83, 90}, //gray
-//	{53, 53, 44}, //brown
 	{32, 70, BaseColor::Type::Colorful},
 	{0, 0, BaseColor::Type::Gray},
-//	{12, 20, BaseColor::Type::Colorful}, //gray
 	{20, 32, BaseColor::Type::Colorful}
 };
 
 std::vector<cv::Vec3b> color{ //we want to
 	{12, 169, 12}, 
-	{126, 112, 95},
 	{126, 112, 95},
 	{17, 78, 62},
 };
@@ -112,6 +107,7 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 	if (a < 1)
 		return;
 	auto f = [=](int x) { return a*x + b; };
+	std::cout << "Applaying\n";
 	//Applying
 	for(int i = 0; i < img.rows - 1; ++i) //Awful thing
 		for(int j = 0; j < img.cols; ++j)
@@ -132,33 +128,7 @@ double dist(cv::Vec3b a, BaseColor b)
 	ma.at<cv::Vec3b>(0, 0) = a;
 	cv::cvtColor(ma, ma, CV_BGR2HSV);
 	auto ha = ma.at<cv::Vec3b>(0, 0);
-	//					std::cout << (int)ha[0] << " " << (int)ha[1] << " " << (int)ha[2] <<"\n";
 	BaseColor::Type type;
-	/*
-	if(ha[1] < gray_s)
-	{
-		if(ha[2] < black_v)
-			type = BaseColor::Type::Black;
-		else
-			type = BaseColor::Type::White;
-	}	
-	else
-		type = BaseColor::Type::Colorful;
-	if(type == b.type)
-	{
-		if(type == BaseColor::Type::Colorful)
-		{
-			if( ha[0] > b.Hbegin && ha[0] < b.Hend)
-				return 0.0;
-			else
-				return inf_dist;
-		}
-		else
-			return 0.0;
-	}
-	else
-		return inf_dist;
-	*/
 	if(ha[1] < gray_s && ha[2] > gray_v)
 		type = BaseColor::Type::Gray;
 	else
