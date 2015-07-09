@@ -9,11 +9,12 @@ const int neighborhood_size = 3; //for masks
 const double gauss_factor = 8;
 
 const double a_max = 1.9; //limit contrast for small parts
+const double a_new_max = 1.0; //a after limitation
 
 //Dist
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
 const int gray_s = 19*255/100;
-const int gray_v = 30*255/100;
+const int gray_v = 35*255/100;
 const double inf_dist = 1000.;
 
 struct BaseColor
@@ -108,8 +109,8 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 		std::cout << "A limitation\n";
 		double rotation_point = (mid[0] + mid[1] + mid[2]) / 3;
 		std::cout << "Rotation point: "<< rotation_point << "\n";
-		double db = a*rotation_point - a_max*rotation_point;
-		a = a_max;
+		double db = a*rotation_point - a_new_max*rotation_point;
+		a = a_new_max;
 		b += db;
 		std::cout << "New A: " << a << ", b: " << b <<"\n";
 	}
