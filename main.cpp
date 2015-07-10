@@ -13,7 +13,7 @@ const double alpha = 0.2;
 const double v_border = 0.9;
 
 const double a_max = 1.9; //limit contrast for small parts
-const double a_new_max = 1.0; //a after limitation
+const double a_new_max = 1.4; //a after limitation
 
 //Dist
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
@@ -30,21 +30,24 @@ struct BaseColor
 
 	int Hbegin;
 	int Hend;
+	int neighborhood_size;
+	double gauss_factor;
 	Type type;
 };
 
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
 std::vector<BaseColor> baseColor{ //before transformation
-	{50/2, 140/2, BaseColor::Type::Colorful}, //Green
-	{0, 0, BaseColor::Type::Gray},
-//	{21/2, 45/2, BaseColor::Type::Colorful}, //Roads
-	{30/2, 64/2, BaseColor::Type::Colorful} //Brown
+	{30/2, 50/2, 2, 15, BaseColor::Type::Colorful}, //Brown
+	{0, 0, 3, 8, BaseColor::Type::Gray},
+	{50/2, 140/2, 3, 8, BaseColor::Type::Colorful}, //Green
+	{185/2, 215/2, 1, 2, BaseColor::Type::Colorful}, //Shadows
 };
 
 std::vector<cv::Vec3b> color{ //we want to
-	{12, 72, 62}, 
-	{126, 112, 95},
 	{17, 78, 62},
+	{126, 112, 95},
+	{5, 40, 40},
+	{24, 23, 21},
 };
 
 
@@ -258,7 +261,7 @@ void autoContrast(cv::Mat& image)
 					if(masks[i].at<cv::Vec3b>(k, l)[0] != 0)
 						paint(k, l);
 			//Blur
-			cv::GaussianBlur(mask, masks[i], cv::Size(neighborhood_size*gauss_factor*2+1, neighborhood_size*gauss_factor*2+1), 0);
+			cv::GaussianBlur(mask, masks[i], cv::Size(baseColor[i].neighborhood_size*baseColor[i].gauss_factor*2+1, baseColor[i].neighborhood_size*baseColor[i].gauss_factor*2+1), 0);
 		}
 
 		for(auto& mask: masks)
