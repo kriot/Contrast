@@ -5,8 +5,12 @@
 #include <opencv2/opencv.hpp>
 
 
-const int neighborhood_size = 3; //for masks
+const int neighborhood_size = 1; //for masks
 const double gauss_factor = 8;
+
+const int hf_distance = 6;
+const double alpha = 0.2;
+const double v_border = 0.9;
 
 const double a_max = 1.9; //limit contrast for small parts
 const double a_new_max = 1.0; //a after limitation
@@ -14,8 +18,11 @@ const double a_new_max = 1.0; //a after limitation
 //Dist
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
 const int gray_s = 19*255/100;
-const int gray_v = 35*255/100;
+//const int gray_v = 51*255/100; //35
+//const int gray_v = 100*255/100; 
 const double inf_dist = 1000.;
+
+int gray_v = 0;
 
 struct BaseColor
 {
@@ -28,9 +35,10 @@ struct BaseColor
 
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
 std::vector<BaseColor> baseColor{ //before transformation
-	{30, 70, BaseColor::Type::Colorful}, //Green
+	{60/2, 140/2, BaseColor::Type::Colorful}, //Green
 	{0, 0, BaseColor::Type::Gray},
-	{20, 32, BaseColor::Type::Colorful} //Brown
+//	{21/2, 45/2, BaseColor::Type::Colorful}, //Roads
+	{45/2, 64/2, BaseColor::Type::Colorful} //Brown
 };
 
 std::vector<cv::Vec3b> color{ //we want to
@@ -161,20 +169,40 @@ double dist(cv::Vec3b a, BaseColor b)
 
 void autoContrast(cv::Mat& image)
 {
-	//Comparator for set
-	auto comp = [](cv::Vec3b a, cv::Vec3b b){
-		if(a[0] != b[0])
-			return a[0] < b[0];
-		if(a[1] != b[1])
-			return a[1] < b[1];
-		if(a[2] != b[2])
-			return a[2] < b[2];
-		return false;	
-	};
-	std::vector<std::set<cv::Vec3b, decltype(comp)>> freqColor(baseColor.size(), std::set<cv::Vec3b, decltype(comp)>(comp));
+	//Gray_v calculation
+	std::cout << "Gray_v calculation\n"; 
+	{
+		int v_max = 0;
+		cv::Mat image_hsv;
+		cv::cvtColor(image, image_hsv, CV_BGR2HSV);
+		std::vector<int> h_freq(256, 0);
+		for(int i = 0; i < image_hsv.rows; ++i)
+			for(int j = 0; j < image_hsv.cols; ++j)
+			{
+				int v = image_hsv.at<cv::Vec3b>(i, j)[2];
+				h_freq[v]++;
+			}
+		
+		//for(int i = 0; i < h_freq.size(); ++i)
+		//{
+		//	std::cout << i << ": " << h_freq[i] << "\n";
+		//}
+		
+		//Last peak detection
+		for(int i = h_freq.size() - 1; i >= hf_distance; --i)
+		{
+			if(h_freq[i] - h_freq[i - hf_distance] > alpha*image.cols*image.rows/h_freq.size())
+			{
+				gray_v = i;
+				break;
+			}
+		}
+		gray_v *= v_border;
+		std::cout << "gray_v: " << gray_v << "\n";
+	}
 	//Making masks
 	std::cout << "Making masks\n";
-	std::vector<cv::Mat> masks(freqColor.size());
+	std::vector<cv::Mat> masks(baseColor.size());
 	for(auto& mask: masks)
 		mask = cv::Mat(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
 	cv::Mat outerMask(image.rows, image.cols, CV_8UC3, cv::Scalar(0,0,0));
