@@ -5,7 +5,7 @@
 #include <opencv2/opencv.hpp>
 
 
-const int neighborhood_size = 1; //for masks
+const int neighborhood_size = 3; //for masks
 const double gauss_factor = 8;
 
 const int hf_distance = 6;
@@ -35,10 +35,10 @@ struct BaseColor
 
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
 std::vector<BaseColor> baseColor{ //before transformation
-	{60/2, 140/2, BaseColor::Type::Colorful}, //Green
+	{50/2, 140/2, BaseColor::Type::Colorful}, //Green
 	{0, 0, BaseColor::Type::Gray},
 //	{21/2, 45/2, BaseColor::Type::Colorful}, //Roads
-	{45/2, 64/2, BaseColor::Type::Colorful} //Brown
+	{30/2, 64/2, BaseColor::Type::Colorful} //Brown
 };
 
 std::vector<cv::Vec3b> color{ //we want to
@@ -88,14 +88,24 @@ std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::M
 	return std::make_tuple(cv::Vec3b(mid[0]/(count+1), mid[1]/(count+1), mid[2]/(count+1)), min, max);
 }
 
-void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv::Vec3b max, cv::Vec3b min)
+void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv::Vec3b max, cv::Vec3b min, bool withMid = true)
 {
 	//Function constructoring
 	int max_cord = std::max({max[0], max[1], max[2]});
 	int min_cord = std::min({min[0], min[1], min[2]});
-	std::vector<double> x{min_cord, max_cord, mid[0], mid[1], mid[2]};
 	std::cout << "Min: " << min_cord << ", max: " << max_cord << "\n";
-	std::vector<double> y{       0,      255,   c[0],   c[1],   c[2]};
+	std::vector<double> x;
+	std::vector<double> y;
+	if(withMid)
+	{
+		x = {min_cord, max_cord, mid[0], mid[1], mid[2]};
+		y = {       0,      255,   c[0],   c[1],   c[2]};
+	}
+	else
+	{
+		x = {min_cord, max_cord};
+		y = {       0,      255};
+	}
 	double sumx = 0,
 		   sumy = 0,
 		   sumxp = 0,
@@ -288,7 +298,7 @@ void autoContrast(cv::Mat& image)
 	auto mid = std::get<0>(t);
 	auto min = std::get<1>(t);
 	auto max = std::get<2>(t);
-	contrast(image, outerMask, mid, mid, max, min);		
+	contrast(image, outerMask, mid, mid, max, min, false);		
 }
 
 int main(int argc, char** argv)
