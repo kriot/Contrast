@@ -23,6 +23,7 @@ const int mask_balance = 100;
 
 const double flex_a = 100.;
 const double flex_b = 100.;
+const double stability = 500.0;
 
 //Dist
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
@@ -49,15 +50,15 @@ struct BaseColor
 
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
 std::vector<BaseColor> baseColor{ //before transformation
-	{30/2, 50/2, 2, 15, BaseColor::Type::Colorful, {1., 1., 10.}}, //Brown
-	{0, 0, 3, 8, BaseColor::Type::Gray, {1., 1., 1.}},
-	{50/2, 140/2, 3, 8, BaseColor::Type::Colorful, {1., 1., 500.}}, //Green
+	{30/2, 50/2, 2, 15, BaseColor::Type::Colorful, {1., 1., 1.}}, //Brown
+	{0, 0, 3, 2, BaseColor::Type::Gray, {1., 1., 100.}},
+	{50/2, 140/2, 3, 8, BaseColor::Type::Colorful, {1., 1., 1.}}, //Green
 //	{185/2, 215/2, 1, 2, BaseColor::Type::Colorful}, //Shadows
 };
 
 std::vector<cv::Vec3b> color{ //we want to
 	{17, 78, 62},
-	{126, 112, 95},
+	{143, 161, 180},
 	{5, 40, 40},
 //	{24, 23, 21},
 };
@@ -78,24 +79,24 @@ std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::M
 {
 	cv::Vec3b max(0,0,0);
 	cv::Vec3b min(255,255,255);
-	long long count = 0;
-	std::vector<long long> mid{0, 0, 0};
+	cv::Vec3b mid(0, 0, 0);
+
 	std::vector<std::vector<int>> hist(3, std::vector<int>(256, 0));
-	std::vector<std::vector<std::vector<int>>> hist3d (256, std::vector<std:vector<int>>(256, std::vector<int>(256, 0)));
+	std::vector<std::vector<std::vector<int>>> hist3d (256, std::vector<std::vector<int>>(256, std::vector<int>(256, 0)));
 
 	for(int i = 0; i < img.rows; ++i) 
 		for(int j = 0; j < img.cols; ++j)
 			if(mask.at<cv::Vec3b>(i, j)[0] > mask_balance)
 			{
-				auto p = img.at<cv::Vec3b>(i, j);
+				cv::Vec3b p = img.at<cv::Vec3b>(i, j);
 				
-				hist[p[0]][p[1]][p[2]]++;
+				hist3d[p[0]][p[1]][p[2]]++;
 
 				for(int ch = 0; ch < 3; ++ch)
 					hist[ch][p[ch]]++;
 			}
 
-	//Peaks
+	//Peaks for min, max
 	for(int ch = 0; ch < 3; ++ch)
 	{
 		//Min
@@ -121,7 +122,20 @@ std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::M
 		}
 	}
 
-	return std::make_tuple(cv::Vec3b(mid[0]/(count+1), mid[1]/(count+1), mid[2]/(count+1)), min, max);
+	//Peak for mid
+	int max_freq = 0;
+	for(int i = 0; i < hist3d.size(); ++i)
+		for(int j = 0; j < hist3d[i].size(); ++j)
+			for(int k = 0; k < hist3d[i][j].size(); ++k)
+			 {
+				if(hist3d[i][j][k] > max_freq)
+				{
+					max_freq = hist3d[i][j][k];
+					mid = cv::Vec3b(i, j, k);
+				}
+			 }
+
+	return std::make_tuple(mid, min, max);
 }
 
 void apply(cv::Mat& img, const cv::Mat& mask, std::function<cv::Vec3b(cv::Vec3b)> Fpixel)
@@ -185,7 +199,7 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 			double k = 0;
 			for(int j = 0; j < x[i].size(); ++j)
 				k += prior[j]*x[i][j]*x[i][j];
-			A.at<double>(i, i) = 2*flex_a + k;
+			A.at<double>(i, i) = 2*flex_a + k + stability;
 		}
 		A.at<double>(i, (i+1) % 3) = -flex_a;
 		A.at<double>(i, (i+2) % 3) = -flex_a;
@@ -227,7 +241,7 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 		{
 			xy += x[i][j]*y[i][j]*prior[j];
 		}
-		B.at<double>(i, 0) = xy;
+		B.at<double>(i, 0) = xy + stability;
 	}	
 	for(int i = 0; i < 3; ++i)
 	{
