@@ -44,14 +44,14 @@ std::vector<BaseColor> baseColor{ //before transformation
 	{30/2, 50/2, 2, 15, BaseColor::Type::Colorful}, //Brown
 	{0, 0, 3, 8, BaseColor::Type::Gray},
 	{50/2, 140/2, 3, 8, BaseColor::Type::Colorful}, //Green
-	{185/2, 215/2, 1, 2, BaseColor::Type::Colorful}, //Shadows
+//	{185/2, 215/2, 1, 2, BaseColor::Type::Colorful}, //Shadows
 };
 
 std::vector<cv::Vec3b> color{ //we want to
 	{17, 78, 62},
 	{126, 112, 95},
 	{5, 40, 40},
-	{24, 23, 21},
+//	{24, 23, 21},
 };
 
 
@@ -106,9 +106,7 @@ void apply(cv::Mat& img, const cv::Mat& mask, std::function<cv::Vec3b(cv::Vec3b)
 			cv::Vec3b newp = Fpixel(p);
 			for(int ch = 0; ch < 3; ++ch)
 			{
-				img.at<cv::Vec3b>(i, j)[ch] = std::max(std::min(
-							newp[ch] * k + p[ch] * (1 - k)
-							, 255.), 0.); 
+				img.at<cv::Vec3b>(i, j)[ch] = newp[ch] * k + p[ch] * (1 - k);
 			}
 		}
 }
@@ -116,16 +114,37 @@ void apply(cv::Mat& img, const cv::Mat& mask, std::function<cv::Vec3b(cv::Vec3b)
 void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv::Vec3b max, cv::Vec3b min, bool withMid = true)
 {
 	//Function constructoring
-	std::vector<std::vector<double>> x {
-		{min[0], max[0], mid[0]},	
-		{min[1], max[1], mid[1]},	
-		{min[2], max[2], mid[2]},	
-	};
-	std::vector<std::vector<double>> y {
-		{     0,    255,   c[0]}, 	
-		{     0,    255,   c[1]}, 	
-		{     0,    255,   c[2]}, 	
-	};
+	std::vector<std::vector<double>> x;
+	std::vector<std::vector<double>> y;
+	if(withMid)
+	{
+		x = {
+			{min[0], max[0], mid[0]},	
+			{min[1], max[1], mid[1]},	
+			{min[2], max[2], mid[2]},
+		};
+		y = {
+			{     0,    255,   c[0]}, 	
+			{     0,    255,   c[1]}, 	
+			{     0,    255,   c[2]}, 	
+		};
+	}
+	else
+	{
+		x = {
+			{min[0], max[0]},	
+			{min[1], max[1]},	
+			{min[2], max[2]},
+		};
+		y = {
+			{     0,    255}, 	
+			{     0,    255}, 	
+			{     0,    255}, 	
+		};
+	}
+
+	std::cout << "Min: " << (int)min[0] << " " << (int)min[1] << " " << (int)min[2] << "\n";
+	std::cout << "Max: " << (int)max[0] << " " << (int)max[1] << " " << (int)max[2] << "\n";
 	
 	//Cols: a1, a2, a3, b1, b2, b3
 	//Rows for: da1, da2, da3, db1, db2, db3
@@ -177,9 +196,9 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 
 	std::function<cv::Vec3b(cv::Vec3b)> Fpixel = [=](cv::Vec3b x) mutable -> cv::Vec3b { 
 		cv::Vec3b r(0, 0, 0);
-		r[0] = res.at<double>(0, 0)*x[0] + res.at<double>(3 + 0, 0); 		
-		r[1] = res.at<double>(1, 0)*x[1] + res.at<double>(3 + 1, 0); 		
-		r[2] = res.at<double>(2, 0)*x[2] + res.at<double>(3 + 2, 0); 		
+		r[0] = std::max(std::min( res.at<double>(0, 0)*x[0] + res.at<double>(3 + 0, 0), 255.), 0.); 		
+		r[1] = std::max(std::min( res.at<double>(1, 0)*x[1] + res.at<double>(3 + 1, 0), 255.), 0.); 		
+		r[2] = std::max(std::min( res.at<double>(2, 0)*x[2] + res.at<double>(3 + 2, 0), 255.), 0.);
 		return r;
 	};
 	//Applying
