@@ -2,6 +2,7 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <functional>
 #include <opencv2/opencv.hpp>
 
 
@@ -91,6 +92,21 @@ std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::M
 	return std::make_tuple(cv::Vec3b(mid[0]/(count+1), mid[1]/(count+1), mid[2]/(count+1)), min, max);
 }
 
+void apply(cv::Mat<cv::Vec3b>& img, std::function<cv::Vec3b(cv::Vec3b)> Fpixel)
+{
+	std::cout << "Applaying\n";
+	for(int i = 0; i < img.rows; ++i) 
+		for(int j = 0; j < img.cols; ++j)
+			for(int ch = 0; ch < 3; ++ch)
+			{
+				int p = img.at<cv::Vec3b>(i, j)[ch];
+				double k = mask.at<cv::Vec3b>(i, j)[0] / 255.;
+				img.at<cv::Vec3b>(i, j)[ch] = std::max(std::min(
+							Fpixel(p) * k + p * (1 - k)
+							, 255.), 0.); 
+			}
+}
+
 void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv::Vec3b max, cv::Vec3b min, bool withMid = true)
 {
 	//Function constructoring
@@ -136,20 +152,10 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 		std::cout << "New A: " << a << ", b: " << b <<"\n";
 	}
 	auto Fpixel = [=](int x) { return a*x + b; };
-	std::cout << "Applaying\n";
 	//Applying
-	for(int i = 0; i < img.rows; ++i) 
-		for(int j = 0; j < img.cols; ++j)
-			for(int ch = 0; ch < 3; ++ch)
-			{
-				int p = img.at<cv::Vec3b>(i, j)[ch];
-				double k = mask.at<cv::Vec3b>(i, j)[0] / 255.;
-				img.at<cv::Vec3b>(i, j)[ch] = std::max(std::min(
-							Fpixel(p) * k + p * (1 - k)
-							, 255.), 0.); 
-			}
-	
+	apply(img, Fpixel);
 }
+	
 
 double dist(cv::Vec3b a, BaseColor b)
 {
