@@ -95,7 +95,7 @@ std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::M
 	return std::make_tuple(cv::Vec3b(mid[0]/(count+1), mid[1]/(count+1), mid[2]/(count+1)), min, max);
 }
 
-void apply(cv::Mat& img, cv::Mat& mask, std::function<cv::Vec3b(cv::Vec3b)> Fpixel)
+void apply(cv::Mat& img, const cv::Mat& mask, std::function<cv::Vec3b(cv::Vec3b)> Fpixel)
 {
 	std::cout << "Applaying\n";
 	for(int i = 0; i < img.rows; ++i) 
@@ -127,6 +127,8 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 		{     0,    255,   c[2]}, 	
 	};
 	
+	//Cols: a1, a2, a3, b1, b2, b3
+	//Rows for: da1, da2, da3, db1, db2, db3
 	cv::Mat A = cv::Mat_<double>(6, 6);
 	for(int i = 0; i < 3; ++i)
 	{
@@ -165,15 +167,26 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 	
 	cv::Mat res;
 	cv::solve(A, B, res, cv::DECOMP_LU); 
+
+	std::cout << "Params: ";
 	for(int i = 0; i < res.rows; ++i)
 	{
 		std::cout << res.at<double>(i, 0) << " ";
 	}
 	std::cout << "\n";
 
-//	auto Fpixel = [=](int x) { return a*x + b; };
+	std::function<cv::Vec3b(cv::Vec3b)> Fpixel = [=](cv::Vec3b x) mutable -> cv::Vec3b { 
+		cv::Vec3b r(0, 0, 0);
+		r[0] = res.at<double>(0, 0)*x[0] + res.at<double>(3 + 0, 0); 		
+		r[1] = res.at<double>(1, 0)*x[1] + res.at<double>(3 + 1, 0); 		
+		r[2] = res.at<double>(2, 0)*x[2] + res.at<double>(3 + 2, 0); 		
+		return r;
+	};
 	//Applying
-//	apply(img, Fpixel);
+	apply(img, mask, Fpixel);
+	cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
+	cv::imshow( "Display window", img );                   // Show our image inside it.
+	cv::waitKey(0); 
 }
 	
 
