@@ -13,11 +13,14 @@ const int hf_distance = 6;
 const double alpha = 0.2;
 const double v_border = 0.9;
 
-const double a_max = 1.9; //limit contrast for small parts
-const double a_new_max = 1.4; //a after limitation
+const int minmax_distance = 6;
+const double minmax_alpha = 0.2;
+const int minmax_border = 1.2;
 
-const double flex_a = 1.;
-const double flex_b = 1.;
+const int mask_balance = 100;
+
+const double flex_a = 100.;
+const double flex_b = 100.;
 
 //Dist
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
@@ -25,6 +28,8 @@ const int gray_s = 19*255/100;
 //const int gray_v = 51*255/100; //35
 //const int gray_v = 100*255/100; 
 const double inf_dist = 1000.;
+
+const std::vector<double> default_prior = {1., 1., 1.};
 
 int gray_v = 0;
 
@@ -37,13 +42,14 @@ struct BaseColor
 	int neighborhood_size;
 	double gauss_factor;
 	Type type;
+	std::vector<double> prior; //min, max, color
 };
 
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
 std::vector<BaseColor> baseColor{ //before transformation
-	{30/2, 50/2, 2, 15, BaseColor::Type::Colorful}, //Brown
-	{0, 0, 3, 8, BaseColor::Type::Gray},
-	{50/2, 140/2, 3, 8, BaseColor::Type::Colorful}, //Green
+	{30/2, 50/2, 2, 15, BaseColor::Type::Colorful, {1., 1., 10.}}, //Brown
+	{0, 0, 3, 8, BaseColor::Type::Gray, {1., 1., 1.}},
+	{50/2, 140/2, 3, 8, BaseColor::Type::Colorful, {1., 1., 500.}}, //Green
 //	{185/2, 215/2, 1, 2, BaseColor::Type::Colorful}, //Shadows
 };
 
@@ -72,9 +78,11 @@ std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::M
 	cv::Vec3b min(255,255,255);
 	long long count = 0;
 	std::vector<long long> mid{0, 0, 0};
+	std::vector<std::vector<int>> hist(3, std::vector<int>(255, 0));
+
 	for(int i = 0; i < img.rows; ++i) 
 		for(int j = 0; j < img.cols; ++j)
-			if(mask.at<cv::Vec3b>(i, j)[0] > 0)
+			if(mask.at<cv::Vec3b>(i, j)[0] > mask_balance)
 			{
 				auto p = img.at<cv::Vec3b>(i, j);
 				
@@ -82,15 +90,36 @@ std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::M
 				mid[1] += p[1];
 				mid[2] += p[2];
 				count++;
-
-				for(int i = 0; i < 3; ++i)
-				{
-					if(p[i] > max[i]) 
-						max[i] = p[i];
-					if(p[i] < min[i])
-						min[i] = p[i];
-				}
+				
+				for(int ch = 0; ch < 3; ++ch)
+					hist[ch][p[ch]]++;
 			}
+
+	//Peaks
+	for(int ch = 0; ch < 3; ++ch)
+	{
+		//Min
+		for(int i = 0; i < hist[ch].size() - minmax_distance; ++i)
+		{
+			if(hist[ch][i] - hist[ch][i + minmax_distance] > minmax_alpha*img.cols*img.rows/hist[ch].size())
+			{
+				min[ch] = i;
+				min[ch] *= minmax_border;
+				break;
+			}
+		}
+		
+		//Max
+		for(int i = hist[ch].size() - 1; i >= minmax_distance; --i)
+		{
+			if(hist[ch][i] - hist[ch][i - minmax_distance] > minmax_alpha*img.cols*img.rows/hist[ch].size())
+			{
+				max[ch] = i;
+				max[ch] *= minmax_border;
+				break;
+			}
+		}
+	}
 
 	return std::make_tuple(cv::Vec3b(mid[0]/(count+1), mid[1]/(count+1), mid[2]/(count+1)), min, max);
 }
@@ -111,7 +140,7 @@ void apply(cv::Mat& img, const cv::Mat& mask, std::function<cv::Vec3b(cv::Vec3b)
 		}
 }
 
-void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv::Vec3b max, cv::Vec3b min, bool withMid = true)
+void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv::Vec3b max, cv::Vec3b min, std::vector<double> prior, bool withMid = true)
 {
 	//Function constructoring
 	std::vector<std::vector<double>> x;
@@ -145,26 +174,47 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 
 	std::cout << "Min: " << (int)min[0] << " " << (int)min[1] << " " << (int)min[2] << "\n";
 	std::cout << "Max: " << (int)max[0] << " " << (int)max[1] << " " << (int)max[2] << "\n";
+	std::cout << "Mid: " << (int)mid[0] << " " << (int)mid[1] << " " << (int)mid[2] << "\n";
 	
 	//Cols: a1, a2, a3, b1, b2, b3
 	//Rows for: da1, da2, da3, db1, db2, db3
 	cv::Mat A = cv::Mat_<double>(6, 6);
 	for(int i = 0; i < 3; ++i)
 	{
-		A.at<double>(i, i) = 2*flex_a + std::accumulate(x[i].begin(), x[i].end(), 0, [](double sum, double xi){return sum + xi*xi;});
+		{
+			double k = 0;
+			for(int j = 0; j < x[i].size(); ++j)
+				k += prior[j]*x[i][j]*x[i][j];
+			A.at<double>(i, i) = 2*flex_a + k;
+		}
 		A.at<double>(i, (i+1) % 3) = -flex_a;
 		A.at<double>(i, (i+2) % 3) = -flex_a;
-		A.at<double>(i, 3 + i) = std::accumulate(x[i].begin(), x[i].end(), 0);
+		{
+			double k = 0;
+			for(int j = 0; j < x[i].size(); ++j)
+				k += prior[j]*x[i][j]; 
+			A.at<double>(i, 3 + i) = k;
+		}
 		A.at<double>(i, 3 + (i+1) % 3) = 0;
 		A.at<double>(i, 3 + (i+2) % 3) = 0;
 	}
 
 	for(int i = 0; i < 3; ++i)
 	{
-		A.at<double>(3 + i, i) = std::accumulate(x[i].begin(), x[i].end(), 0);
+		{
+			double k = 0;
+			for(int j = 0; j < x[i].size(); ++j)
+				k += prior[j]*x[i][j];
+			A.at<double>(3 + i, i) = k;
+		}
 		A.at<double>(3 + i, (i+1) % 3) = 0;
 		A.at<double>(3 + i, (i+2) % 3) = 0;
-		A.at<double>(3 + i, 3 + i) = x[i].size() + 2*flex_b;
+		{
+			double k = 0;
+			for(int j = 0; j < x[i].size(); ++j)
+				k += prior[j];
+			A.at<double>(3 + i, 3 + i) = k + 2*flex_b;
+		}
 		A.at<double>(3 + i, 3 + (i+1) % 3) = -flex_b;
 		A.at<double>(3 + i, 3 + (i+2) % 3) = -flex_b;
 	}
@@ -175,13 +225,16 @@ void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv:
 		double xy = 0;
 		for(int j = 0; j < x[i].size(); ++j)
 		{
-			xy += x[i][j]*y[i][j];
+			xy += x[i][j]*y[i][j]*prior[j];
 		}
 		B.at<double>(i, 0) = xy;
 	}	
 	for(int i = 0; i < 3; ++i)
 	{
-		B.at<double>(3 + i, 0) = std::accumulate(y[i].begin(), y[i].end(), 0); 
+		double k = 0;
+		for(int j = 0; j < x[i].size(); ++j)
+			k += prior[j]*y[i][j];
+		B.at<double>(3 + i, 0) = k; 
 	}
 	
 	cv::Mat res;
@@ -356,13 +409,13 @@ void autoContrast(cv::Mat& image)
 		auto mid = std::get<0>(t);
 		auto min = std::get<1>(t);
 		auto max = std::get<2>(t);
-		contrast(image, masks[i], mid, color[i], max, min);		
+		contrast(image, masks[i], mid, color[i], max, min, baseColor[i].prior);		
 	}
 	auto t = getForMask(image, outerMask);
 	auto mid = std::get<0>(t);
 	auto min = std::get<1>(t);
 	auto max = std::get<2>(t);
-	contrast(image, outerMask, mid, mid, max, min, false);		
+	contrast(image, outerMask, mid, mid, max, min, default_prior, false);		
 }
 
 int main(int argc, char** argv)
