@@ -5,6 +5,8 @@
 #include <functional>
 #include <opencv2/opencv.hpp>
 
+//To do:
+//Mid by peaks
 
 const int neighborhood_size = 3; //for masks
 const double gauss_factor = 8;
@@ -78,7 +80,8 @@ std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::M
 	cv::Vec3b min(255,255,255);
 	long long count = 0;
 	std::vector<long long> mid{0, 0, 0};
-	std::vector<std::vector<int>> hist(3, std::vector<int>(255, 0));
+	std::vector<std::vector<int>> hist(3, std::vector<int>(256, 0));
+	std::vector<std::vector<std::vector<int>>> hist3d (256, std::vector<std:vector<int>>(256, std::vector<int>(256, 0)));
 
 	for(int i = 0; i < img.rows; ++i) 
 		for(int j = 0; j < img.cols; ++j)
@@ -86,11 +89,8 @@ std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::M
 			{
 				auto p = img.at<cv::Vec3b>(i, j);
 				
-				mid[0] += p[0];
-				mid[1] += p[1];
-				mid[2] += p[2];
-				count++;
-				
+				hist[p[0]][p[1]][p[2]]++;
+
 				for(int ch = 0; ch < 3; ++ch)
 					hist[ch][p[ch]]++;
 			}
