@@ -16,6 +16,9 @@ const double v_border = 0.9;
 const double a_max = 1.9; //limit contrast for small parts
 const double a_new_max = 1.4; //a after limitation
 
+const double flex_a = 1.;
+const double flex_b = 1.;
+
 //Dist
 //OpenCV HSV: H [0-180], S [0-255], V [0-255]
 const int gray_s = 19*255/100;
@@ -92,68 +95,85 @@ std::tuple<cv::Vec3b, cv::Vec3b, cv::Vec3b> getForMask(cv::Mat& img, const cv::M
 	return std::make_tuple(cv::Vec3b(mid[0]/(count+1), mid[1]/(count+1), mid[2]/(count+1)), min, max);
 }
 
-void apply(cv::Mat<cv::Vec3b>& img, std::function<cv::Vec3b(cv::Vec3b)> Fpixel)
+void apply(cv::Mat& img, cv::Mat& mask, std::function<cv::Vec3b(cv::Vec3b)> Fpixel)
 {
 	std::cout << "Applaying\n";
 	for(int i = 0; i < img.rows; ++i) 
 		for(int j = 0; j < img.cols; ++j)
+		{
+			cv::Vec3b p = img.at<cv::Vec3b>(i, j);
+			double k = mask.at<cv::Vec3b>(i, j)[0] / 255.;
+			cv::Vec3b newp = Fpixel(p);
 			for(int ch = 0; ch < 3; ++ch)
 			{
-				int p = img.at<cv::Vec3b>(i, j)[ch];
-				double k = mask.at<cv::Vec3b>(i, j)[0] / 255.;
 				img.at<cv::Vec3b>(i, j)[ch] = std::max(std::min(
-							Fpixel(p) * k + p * (1 - k)
+							newp[ch] * k + p[ch] * (1 - k)
 							, 255.), 0.); 
 			}
+		}
 }
 
 void contrast(cv::Mat& img, const cv::Mat& mask, cv::Vec3b mid, cv::Vec3b c, cv::Vec3b max, cv::Vec3b min, bool withMid = true)
 {
 	//Function constructoring
-	int max_cord = std::max({max[0], max[1], max[2]});
-	int min_cord = std::min({min[0], min[1], min[2]});
-	std::cout << "Min: " << min_cord << ", max: " << max_cord << "\n";
-	std::vector<double> x;
-	std::vector<double> y;
-	if(withMid)
+	std::vector<std::vector<double>> x {
+		{min[0], max[0], mid[0]},	
+		{min[1], max[1], mid[1]},	
+		{min[2], max[2], mid[2]},	
+	};
+	std::vector<std::vector<double>> y {
+		{     0,    255,   c[0]}, 	
+		{     0,    255,   c[1]}, 	
+		{     0,    255,   c[2]}, 	
+	};
+	
+	cv::Mat A = cv::Mat_<double>(6, 6);
+	for(int i = 0; i < 3; ++i)
 	{
-		x = {min_cord, max_cord, mid[0], mid[1], mid[2]};
-		y = {       0,      255,   c[0],   c[1],   c[2]};
+		A.at<double>(i, i) = 2*flex_a + std::accumulate(x[i].begin(), x[i].end(), 0, [](double sum, double xi){return sum + xi*xi;});
+		A.at<double>(i, (i+1) % 3) = -flex_a;
+		A.at<double>(i, (i+2) % 3) = -flex_a;
+		A.at<double>(i, 3 + i) = std::accumulate(x[i].begin(), x[i].end(), 0);
+		A.at<double>(i, 3 + (i+1) % 3) = 0;
+		A.at<double>(i, 3 + (i+2) % 3) = 0;
 	}
-	else
+
+	for(int i = 0; i < 3; ++i)
 	{
-		x = {min_cord, max_cord};
-		y = {       0,      255};
+		A.at<double>(3 + i, i) = std::accumulate(x[i].begin(), x[i].end(), 0);
+		A.at<double>(3 + i, (i+1) % 3) = 0;
+		A.at<double>(3 + i, (i+2) % 3) = 0;
+		A.at<double>(3 + i, 3 + i) = x[i].size() + 2*flex_b;
+		A.at<double>(3 + i, 3 + (i+1) % 3) = -flex_b;
+		A.at<double>(3 + i, 3 + (i+2) % 3) = -flex_b;
 	}
-	double sumx = 0,
-		   sumy = 0,
-		   sumxp = 0,
-		   sumxy = 0;
-	for(int i = 0; i < x.size(); ++i)
+
+	cv::Mat B = cv::Mat_<double>(6, 1);
+   	for(int i = 0; i < 3; ++i)
 	{
-		sumx  += x[i];
-		sumy  += y[i];
-		sumxp += x[i]*x[i];
-		sumxy += x[i]*y[i];
-	}
-	double a = (sumx*sumy - x.size()*sumxy) / (sumx*sumx - x.size()*sumxp);
-	double b = (sumx*sumxy - sumxp*sumy)    / (sumx*sumx - x.size()*sumxp);
-	std::cout << "A: " << a << ", b: " << b <<"\n";
-	if (a < 1)
-		return;
-	if (a > a_max) //Limitation is needed because else there is too big color difference
+		double xy = 0;
+		for(int j = 0; j < x[i].size(); ++j)
+		{
+			xy += x[i][j]*y[i][j];
+		}
+		B.at<double>(i, 0) = xy;
+	}	
+	for(int i = 0; i < 3; ++i)
 	{
-		std::cout << "A limitation\n";
-		double rotation_point = (mid[0] + mid[1] + mid[2]) / 3;
-		std::cout << "Rotation point: "<< rotation_point << "\n";
-		double db = a*rotation_point - a_new_max*rotation_point;
-		a = a_new_max;
-		b += db;
-		std::cout << "New A: " << a << ", b: " << b <<"\n";
+		B.at<double>(3 + i, 0) = std::accumulate(y[i].begin(), y[i].end(), 0); 
 	}
-	auto Fpixel = [=](int x) { return a*x + b; };
+	
+	cv::Mat res;
+	cv::solve(A, B, res, cv::DECOMP_LU); 
+	for(int i = 0; i < res.rows; ++i)
+	{
+		std::cout << res.at<double>(i, 0) << " ";
+	}
+	std::cout << "\n";
+
+//	auto Fpixel = [=](int x) { return a*x + b; };
 	//Applying
-	apply(img, Fpixel);
+//	apply(img, Fpixel);
 }
 	
 
