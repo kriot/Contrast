@@ -347,6 +347,9 @@ void autoContrast(cv::Mat& image)
 	}
 	//Contrast
 	std::cout << "Contrast processing\n";
+	cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
+	cv::imshow( "Display window", image );                   // Show our image inside it.
+	cv::waitKey(0); 
 	for(int i = 0; i < masks.size(); ++i)
 	{
 		auto t = getForMask(image, masks[i]);
